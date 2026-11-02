@@ -51,6 +51,25 @@ public struct HostRecord: Identifiable, Hashable, Sendable, Codable {
         case none
         case tcpProbe
         case icmp
+
+        /// User-facing label (never expose raw enum cases in UI).
+        public var displayLabel: String {
+            switch self {
+            case .none: return "—"
+            case .tcpProbe: return "TCP connection"
+            case .icmp: return "ICMP echo"
+            }
+        }
+    }
+
+    public var responseSummary: String {
+        guard let ms = responseTimeMs else { return "—" }
+        switch latencyKind {
+        case .none:
+            return String(format: "%.0f ms", ms)
+        case .tcpProbe, .icmp:
+            return String(format: "%.0f ms · %@", ms, latencyKind.displayLabel)
+        }
     }
 
     public init(

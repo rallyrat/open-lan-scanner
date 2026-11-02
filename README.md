@@ -10,7 +10,7 @@ Native, open-source **macOS LAN scanner**. Scan local IPv4 ranges, review live h
 
 ![Main window with populated scan results and device inspector](Docs/assets/01-main-results.png)
 
-<p align="center"><em>Main window — results table and inspector. Demo data (RFC 5737 TEST-NET-3); no live network scan.</em></p>
+<p align="center"><em>Main window — interface → target → Scan, results table, and inspector. Demo data (RFC 5737 TEST-NET-3); no live network scan.</em></p>
 
 | | |
 |---|---|
@@ -130,11 +130,11 @@ Captured from the real app UI with `--demo-ui` (fictional TEST-NET-3 hosts). The
 
 ![Selected host inspector with remote actions](Docs/assets/02-inspector-actions.png)
 
-<p align="center"><em>Inspector — host detail and actions (SMB, HTTP(S), SSH, VNC, RDP, Wake-on-LAN, Ping). Demo data.</em></p>
+<p align="center"><em>Inspector — display name, details, favorite editing, and service-suggested actions. Demo data.</em></p>
 
 ![Favorites filter in dark appearance](Docs/assets/03-favorites-dark.png)
 
-<p align="center"><em>Favorites filter in dark appearance. Demo data.</em></p>
+<p align="center"><em>Favorites filter in dark appearance with adaptive status colors. Demo data.</em></p>
 
 Regenerate locally (no network probes):
 

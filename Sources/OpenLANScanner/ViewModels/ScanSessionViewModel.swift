@@ -37,6 +37,17 @@ final class ScanSessionViewModel {
         }
     }
     var vendorLookup: OUIVendorLookup
+    /// Compact results-table density (persisted).
+    var compactTableDensity: Bool = UserDefaults.standard.bool(forKey: "ols.table.compact") {
+        didSet { UserDefaults.standard.set(compactTableDensity, forKey: "ols.table.compact") }
+    }
+    /// Optional columns hidden by default; persisted independently.
+    var showMACColumn: Bool = UserDefaults.standard.object(forKey: "ols.column.visible.mac") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(showMACColumn, forKey: "ols.column.visible.mac") }
+    }
+    var showVendorColumn: Bool = UserDefaults.standard.object(forKey: "ols.column.visible.vendor") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(showVendorColumn, forKey: "ols.column.visible.vendor") }
+    }
 
     enum EmptyStateKind: Equatable {
         case firstLaunch

@@ -68,6 +68,15 @@ public struct DiscoveryEvidence: Hashable, Sendable, Codable, Equatable {
         case tcpRefused
         case icmpEcho
         case bonjour
+
+        public var displayLabel: String {
+            switch self {
+            case .tcpOpen: return "Open TCP port"
+            case .tcpRefused: return "TCP connection refused"
+            case .icmpEcho: return "ICMP echo reply"
+            case .bonjour: return "Bonjour"
+            }
+        }
     }
 
     public var kind: Kind
@@ -80,5 +89,10 @@ public struct DiscoveryEvidence: Hashable, Sendable, Codable, Equatable {
         self.detail = detail
         self.observedAt = observedAt
         self.latencyMs = latencyMs
+    }
+
+    public var displaySummary: String {
+        if detail.isEmpty { return kind.displayLabel }
+        return "\(kind.displayLabel) · \(detail)"
     }
 }
