@@ -48,7 +48,17 @@ if [[ -z "$ARCH_LABEL" ]]; then
   esac
 fi
 
-STAGE="$DIST/stage"
+# Ephemeral staging under dist/, removed before exit (also cleaned by Scripts/clean-local.sh).
+STAGE="$DIST/stage.$$"
+DMG_ROOT=""
+TMP_DMG=""
+cleanup_packaging_temps() {
+  [[ -n "${STAGE:-}" ]] && rm -rf -- "$STAGE"
+  [[ -n "${DMG_ROOT:-}" ]] && rm -rf -- "$DMG_ROOT"
+  [[ -n "${TMP_DMG:-}" ]] && rm -f -- "$TMP_DMG"
+}
+trap cleanup_packaging_temps EXIT
+
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 export COPYFILE_DISABLE=1
@@ -65,21 +75,25 @@ DMG=""
 if [[ "$CREATE_DMG" == "1" ]]; then
   DMG="$DIST/OpenLANScanner-${VERSION}-${ARCH_LABEL}.dmg"
   rm -f "$DMG"
-  DMG_ROOT="$DIST/dmg-root"
+  DMG_ROOT="$DIST/dmg-root.$$"
   rm -rf "$DMG_ROOT"
   mkdir -p "$DMG_ROOT"
   ditto --norsrc --noextattr "$APP" "$DMG_ROOT/OpenLANScanner.app"
   find "$DMG_ROOT" \( -name '._*' -o -name '.DS_Store' \) -delete 2>/dev/null || true
   ln -s /Applications "$DMG_ROOT/Applications"
-  # RW temp then convert for a simple installer disk image
-  TMP_DMG="$DIST/tmp-ols.dmg"
+  # Unique temp name avoids collisions between concurrent package runs.
+  TMP_DMG="$DIST/tmp-ols.$$.dmg"
   rm -f "$TMP_DMG"
   hdiutil create -volname "Open LAN Scanner" -srcfolder "$DMG_ROOT" -ov -format UDRW "$TMP_DMG" >/dev/null
   hdiutil convert "$TMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG" >/dev/null
   rm -f "$TMP_DMG"
+  TMP_DMG=""
   rm -rf "$DMG_ROOT"
+  DMG_ROOT=""
   echo "==> Created $DMG"
 fi
+rm -rf "$STAGE"
+STAGE=""
 
 # Reject AppleDouble / missing required paths before checksums settle.
 "$ROOT/Scripts/validate-archive-contents.sh" "$DIST"

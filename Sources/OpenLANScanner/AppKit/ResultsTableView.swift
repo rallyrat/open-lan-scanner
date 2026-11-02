@@ -54,37 +54,58 @@ struct ResultsTableView: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         let coordinator = context.coordinator
         coordinator.parent = self
-        let sorted = Self.sorted(hosts, column: sortColumn, ascending: sortAscending)
         let previousSelection = selectedIDs
         let previousScroll = (nsView.documentView as? NSTableView).map {
             $0.enclosingScrollView?.contentView.bounds.origin.y ?? 0
         } ?? 0
 
-        let oldIDs = coordinator.hosts.map(\.id)
-        let newIDs = sorted.map(\.id)
-        coordinator.hosts = sorted
-        coordinator.applySortIndicators(on: coordinator.tableView)
+        let sortUnchanged = coordinator.lastSortColumn == sortColumn
+            && coordinator.lastSortAscending == sortAscending
+        // Skip re-sort + full reload when the presented rows are unchanged (common during
+        // selection-only / timer-driven SwiftUI updates).
+        let dataUnchanged = sortUnchanged && coordinator.hosts == hosts
+        if !dataUnchanged {
+            let sorted = Self.sorted(hosts, column: sortColumn, ascending: sortAscending)
+            let oldIDs = coordinator.hosts.map(\.id)
+            let newIDs = sorted.map(\.id)
+            coordinator.hosts = sorted
+            coordinator.lastSortColumn = sortColumn
+            coordinator.lastSortAscending = sortAscending
+            coordinator.applySortIndicators(on: coordinator.tableView)
 
-        if oldIDs != newIDs {
-            coordinator.tableView?.reloadData()
+            if let table = coordinator.tableView {
+                if oldIDs != newIDs {
+                    table.reloadData()
+                } else {
+                    // Same row identities: refresh visible cells only (enrichment / latency updates).
+                    let visibleRange = table.rows(in: table.visibleRect)
+                    let cols = IndexSet(integersIn: 0..<table.numberOfColumns)
+                    if visibleRange.length > 0 {
+                        let rows = IndexSet(integersIn: visibleRange.location..<(visibleRange.location + visibleRange.length))
+                        table.reloadData(forRowIndexes: rows, columnIndexes: cols)
+                    } else {
+                        table.reloadData()
+                    }
+                }
+            }
         } else {
-            // Same IDs: reload visible rows only to refresh cells without jumping.
-            coordinator.tableView?.reloadData()
+            coordinator.applySortIndicators(on: coordinator.tableView)
         }
 
         if let table = coordinator.tableView {
+            let rows = coordinator.hosts
             var indexes = IndexSet()
             for id in previousSelection {
-                if let row = sorted.firstIndex(where: { $0.id == id }) {
+                if let row = rows.firstIndex(where: { $0.id == id }) {
                     indexes.insert(row)
                 }
             }
             table.selectRowIndexes(indexes, byExtendingSelection: false)
-            if let y = Optional(previousScroll), let clip = table.enclosingScrollView?.contentView {
-                clip.scroll(to: NSPoint(x: 0, y: y))
+            if let clip = table.enclosingScrollView?.contentView {
+                clip.scroll(to: NSPoint(x: 0, y: previousScroll))
                 table.enclosingScrollView?.reflectScrolledClipView(clip)
             }
-            if let selected = selection, let row = sorted.firstIndex(where: { $0.id == selected }) {
+            if let selected = selection, let row = rows.firstIndex(where: { $0.id == selected }) {
                 table.scrollRowToVisible(row)
             }
         }
@@ -122,11 +143,15 @@ struct ResultsTableView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTableViewDelegate, NSTableViewDataSource {
         var parent: ResultsTableView
         var hosts: [HostRecord] = []
+        var lastSortColumn: String = ""
+        var lastSortAscending: Bool = true
         weak var tableView: NSTableView?
 
         init(parent: ResultsTableView) {
             self.parent = parent
             self.hosts = parent.hosts
+            self.lastSortColumn = parent.sortColumn
+            self.lastSortAscending = parent.sortAscending
         }
 
         static func makeColumns() -> [NSTableColumn] {

@@ -14,9 +14,11 @@ fi
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 CONFIG="${CONFIG:-release}"
 # Prefer a local scratch path — external volumes with spaces can break SwiftPM indexes.
+# Override BUILD_PATH for concurrent builds (CI / ASan / packaging) to avoid clobbering.
 BUILD_PATH="${BUILD_PATH:-/tmp/open-lan-scanner-build}"
 DIST="$ROOT/dist"
 APP="$DIST/OpenLANScanner.app"
+mkdir -p "$DIST"
 
 echo "==> Building OpenLANScanner $VERSION ($CONFIG) → $BUILD_PATH"
 swift build -c "$CONFIG" --product OpenLANScanner --build-path "$BUILD_PATH"

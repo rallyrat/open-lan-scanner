@@ -7,6 +7,7 @@ dist/
 DerivedData/
 Resources/OUI/oui.csv
 *.dmg
+*.zip
 .idea/
 .vscode/
 *.p12
@@ -20,12 +21,20 @@ Resources/OUI/oui.csv
 !.env.example
 xcuserdata/
 *.xcuserstate
-# Local notarization / keychain helpers
+# Local notarization / keychain helpers / packaging debris
 notary-log.json
+notary-log-*.json
+*.notarization.json
 /tmp/
 **/__pycache__/
 *.pyc
 .Python
+# Ephemeral packaging leftovers if a run is interrupted
+dist/stage/
+dist/stage.*/
+dist/dmg-root/
+dist/dmg-root.*/
+dist/tmp-ols*.dmg
 
 # BMAD Method (stable v6) — keep `_bmad/` install metadata; ignore personal overrides,
 # generated artifacts, and the local Cursor skill mirror under `.agents/` (re-rendered).

@@ -36,7 +36,7 @@ final class ScanSessionViewModel {
             UserDefaults.standard.set(historyRetention, forKey: "ols.history.retention")
         }
     }
-    var vendorLookup: OUIVendorLookup = .loadDefault()
+    var vendorLookup: OUIVendorLookup
 
     enum EmptyStateKind: Equatable {
         case firstLaunch
@@ -94,10 +94,11 @@ final class ScanSessionViewModel {
         if UserDefaults.standard.object(forKey: "ols.history.retention") != nil {
             historyRetention = max(5, UserDefaults.standard.integer(forKey: "ols.history.retention"))
         }
+        // Load OUI once (property no longer defaults to a second parse).
+        vendorLookup = .loadDefault()
         refreshInterfaces(selectPreferred: true)
         reloadFavorites()
         reloadHistory()
-        vendorLookup = .loadDefault()
     }
 
     var vendorDatasetDescription: String {
