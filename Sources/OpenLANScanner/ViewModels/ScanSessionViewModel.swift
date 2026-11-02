@@ -65,6 +65,8 @@ final class ScanSessionViewModel {
     private var activeGeneration: UUID?
     private var scanConsumerTask: Task<Void, Never>?
     private var hasCompletedScan = false
+    /// True only when launched with explicit `--demo-ui` / `OLS_DEMO_UI=1`.
+    private(set) var isDemoScreenshotMode = false
 
     init(
         engine: ScanEngine = ScanEngine(),
@@ -153,7 +155,57 @@ final class ScanSessionViewModel {
         }
     }
 
+    /// Loads fictional RFC 5737 documentation hosts. Does not probe the network.
+    func loadDemoScreenshotData() {
+        isDemoScreenshotMode = true
+        isScanning = false
+        hasCompletedScan = true
+        permissionWarning = nil
+        errorMessage = nil
+        rangeEditedManually = true
+        rangeText = DemoScreenshotCatalog.rangeText
+        // Replace live adapters so screenshots never leak private interface addresses.
+        let demoInterface = NetworkInterfaceInfo(
+            name: "en0",
+            displayName: "Demo Wi‑Fi",
+            ipv4: IPv4Address(string: "203.0.113.10")!,
+            prefixLength: 24,
+            isUp: true,
+            isLoopback: false,
+            isLikelyVPN: false
+        )
+        interfaces = [demoInterface]
+        selectedInterfaceID = demoInterface.id
+        hosts = DemoScreenshotCatalog.hosts()
+        selectDemoHost(ip: "203.0.113.20")
+        showInspector = true
+        showOnlineOnly = false
+        showFavoritesOnly = false
+        searchText = ""
+        progress = ScanProgress(
+            completed: hosts.count,
+            total: hosts.count,
+            onlineCount: hosts.filter { $0.status == .online }.count,
+            phase: .completed,
+            interfaceNote: DemoScreenshotCatalog.interfaceNote
+        )
+        statusMessage = "Demo data — not a live network scan"
+        actionBanner = "Screenshot mode: fictional TEST-NET-3 hosts (RFC 5737). No network probes were sent."
+        elapsed = 4.2
+        recomputeEmptyState()
+    }
+
+    func selectDemoHost(ip: String) {
+        guard let host = hosts.first(where: { $0.ip.dotted == ip }) else { return }
+        selectedHostID = host.id
+        selectedHostIDs = [host.id]
+    }
+
     func refreshInterfaces(selectPreferred: Bool) {
+        if isDemoScreenshotMode {
+            // Keep fictional adapter only — never reintroduce live addresses mid-capture.
+            return
+        }
         interfaces = interfaceEnumerator.usableIPv4Interfaces()
         if selectPreferred || selectedInterfaceID == nil {
             if let preferred = (interfaceEnumerator as? SystemInterfaceEnumerator)?.preferredInterface()
@@ -392,6 +444,11 @@ final class ScanSessionViewModel {
     }
 
     func requestScan() {
+        if isDemoScreenshotMode {
+            statusMessage = "Demo mode — live scanning disabled"
+            showAction("Demo screenshot mode does not send network probes. Relaunch without --demo-ui to scan.")
+            return
+        }
         errorMessage = nil
         do {
             let expansion = try AddressRangeParser.parse(rangeText)
@@ -409,6 +466,7 @@ final class ScanSessionViewModel {
 
     func confirmLargeRangeScan() {
         showLargeRangeConfirm = false
+        if isDemoScreenshotMode { return }
         guard let expansion = try? AddressRangeParser.parse(rangeText) else { return }
         startScan(addresses: expansion.addresses)
     }

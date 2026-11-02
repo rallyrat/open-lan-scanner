@@ -7,12 +7,17 @@ import UniformTypeIdentifiers
 @MainActor
 struct OpenLANScannerApp: App {
     @State private var model = ScanSessionViewModel()
+    @State private var didApplyDemoLaunch = false
 
     var body: some Scene {
         WindowGroup("Open LAN Scanner") {
             ContentView(model: model)
-                .frame(minWidth: 900, minHeight: 560)
+                .frame(minWidth: 1100, minHeight: 680)
+                .onAppear {
+                    applyDemoLaunchIfNeeded()
+                }
         }
+        .defaultSize(width: 1180, height: 720)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .pasteboard) {
@@ -109,6 +114,61 @@ struct OpenLANScannerApp: App {
     private static var isEditingText: Bool {
         guard let responder = NSApp.keyWindow?.firstResponder else { return false }
         return responder is NSTextView || responder is NSTextField || responder is NSText
+    }
+
+    private func applyDemoLaunchIfNeeded() {
+        guard !didApplyDemoLaunch else { return }
+        didApplyDemoLaunch = true
+        guard DemoScreenshotLaunchOptions.isDemoUI else { return }
+
+        model.loadDemoScreenshotData()
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        guard let exportDir = DemoScreenshotLaunchOptions.exportDirectory else { return }
+        Task { @MainActor in
+            await exportDemoScreenshots(to: exportDir)
+        }
+    }
+
+    private func exportDemoScreenshots(to directory: URL) async {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Allow SwiftUI + AppKit table to settle before capturing.
+        try? await Task.sleep(nanoseconds: 900_000_000)
+
+        let appearance = NSApp.effectiveAppearance
+        defer { NSApp.appearance = appearance }
+
+        // 1) Main results + inspector (light) — NAS selected for SMB/SSH services
+        NSApp.appearance = NSAppearance(named: .aqua)
+        model.showFavoritesOnly = false
+        model.selectDemoHost(ip: "203.0.113.20")
+        model.showInspector = true
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        try? DemoWindowCapture.captureKeyWindowPNG(
+            to: directory.appendingPathComponent("01-main-results.png")
+        )
+
+        // 2) Laptop selected — inspector actions + hostname-focused detail
+        model.selectDemoHost(ip: "203.0.113.42")
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        try? DemoWindowCapture.captureKeyWindowPNG(
+            to: directory.appendingPathComponent("02-inspector-actions.png")
+        )
+
+        // 3) Favorites filter in dark appearance
+        NSApp.appearance = NSAppearance(named: .darkAqua)
+        model.showFavoritesOnly = true
+        model.selectDemoHost(ip: "203.0.113.1")
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        try? DemoWindowCapture.captureKeyWindowPNG(
+            to: directory.appendingPathComponent("03-favorites-dark.png")
+        )
+
+        // Signal completion for automation wrappers.
+        let marker = directory.appendingPathComponent("EXPORT_DONE")
+        try? "ok\n".write(to: marker, atomically: true, encoding: .utf8)
+        NSApp.terminate(nil)
     }
 
     private func exportCSV(_ scope: ScanSessionViewModel.ExportScope) {

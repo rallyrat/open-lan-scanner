@@ -5,8 +5,12 @@ Native, open-source **macOS LAN scanner**. Scan local IPv4 ranges, review live h
 **Not affiliated with Advanced IP Scanner or Famatech.**
 
 <p align="center">
-  <img src="Resources/Icon/AppIcon-1024.png" alt="Open LAN Scanner icon" width="128" height="128">
+  <img src="Resources/Icon/AppIcon-1024.png" alt="Open LAN Scanner icon" width="96" height="96">
 </p>
+
+![Main window with populated scan results and device inspector](Docs/assets/01-main-results.png)
+
+<p align="center"><em>Main window — results table and inspector. Demo data (RFC 5737 TEST-NET-3); no live network scan.</em></p>
 
 | | |
 |---|---|
@@ -77,7 +81,7 @@ Ordinary `swift build` / `./Scripts/build-app.sh` never requires Apple credentia
 - Response times are **TCP connect probe** latency unless an ICMP sample succeeds.
 - Windows remote shutdown and Radmin are **not** supported ([notes](Docs/REMOTE_SHUTDOWN.md)).
 - Early `0.x` software — expect rough edges.
-- No committed live-network screenshots yet (sensitive LAN details); run the app locally to review UI.
+- README screenshots use explicit demo data, not a live LAN capture.
 
 ## Build from source
 
@@ -122,7 +126,23 @@ Imported data is stored under Application Support and kept if a later import fai
 
 ## Screenshots
 
-Live-network screenshots are not committed (LAN details are sensitive). After `./Scripts/build-app.sh`, open `dist/OpenLANScanner.app` for UI review. A GitHub social preview image lives at [`docs/assets/github-social-preview.png`](docs/assets/github-social-preview.png).
+Captured from the real app UI with `--demo-ui` (fictional TEST-NET-3 hosts). They illustrate layout and actions only — not accessibility sign-off or authorized live-network testing.
+
+![Selected host inspector with remote actions](Docs/assets/02-inspector-actions.png)
+
+<p align="center"><em>Inspector — host detail and actions (SMB, HTTP(S), SSH, VNC, RDP, Wake-on-LAN, Ping). Demo data.</em></p>
+
+![Favorites filter in dark appearance](Docs/assets/03-favorites-dark.png)
+
+<p align="center"><em>Favorites filter in dark appearance. Demo data.</em></p>
+
+Regenerate locally (no network probes):
+
+```bash
+./Scripts/export-demo-screenshots.sh
+```
+
+GitHub social preview: [`Docs/assets/github-social-preview.png`](Docs/assets/github-social-preview.png).
 
 ## CI
 
