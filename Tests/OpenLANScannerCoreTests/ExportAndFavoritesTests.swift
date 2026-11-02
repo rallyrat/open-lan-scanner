@@ -58,9 +58,14 @@ final class ExportAndFavoritesTests: XCTestCase {
     }
 
     func testOUIVendorLookup() {
-        let lookup = OUIVendorLookup(prefixes: ["001A2B": "Apple, Inc."])
-        XCTAssertEqual(lookup.vendor(forMAC: "00:1a:2b:11:22:33"), "Apple, Inc.")
-        XCTAssertNil(lookup.vendor(forMAC: "ff:ff:ff:00:00:00"))
+        let lookup = OUIVendorLookup(prefixes: ["001A2B": "Ayecom Technology Co., Ltd."])
+        XCTAssertEqual(lookup.vendor(forMAC: "00:1a:2b:11:22:33"), "Ayecom Technology Co., Ltd.")
+        // ff:... is locally administered (U/L bit), so vendor returns the LAA explanation.
+        XCTAssertEqual(
+            lookup.vendor(forMAC: "ff:ff:ff:00:00:00"),
+            "Locally administered / randomized MAC"
+        )
+        XCTAssertNil(lookup.vendor(forMAC: "00:11:22:33:44:55"))
     }
 
     func testHostRecordMergeDoesNotFabricate() {

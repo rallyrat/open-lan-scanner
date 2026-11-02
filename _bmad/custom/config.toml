@@ -1,0 +1,13 @@
+# Team overrides for Open LAN Scanner (native Swift/macOS — not a Playwright app).
+# This file is never overwritten by the BMAD installer.
+
+[modules.tea]
+# Do not mandate Playwright/Pact utilities for this AppKit/SwiftUI project.
+tea_use_playwright_utils = false
+tea_use_pactjs_utils = false
+tea_pact_mcp = "none"
+tea_browser_automation = "none"
+test_stack_type = "backend"
+test_framework = "xctest"
+ci_platform = "github"
+risk_threshold = "p0"

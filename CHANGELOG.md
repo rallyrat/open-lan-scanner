@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Harden Terminal/AppleScript device actions (argv quoting, username allow-list)
+- Neutralize CSV spreadsheet formula injection on export (including leading whitespace/BOM); JSON export unchanged
+- Bound OUI / favorites / history file sizes before load; timeout stalled reverse DNS; cap concurrent DNS lookups
+- Cancel in-flight `NWConnection` probes on task cancellation
+- Extract bounds-checked routing/ICMP parsers with deterministic fuzz tests; validate ICMP echo replies
+- Hard-limit enrichment concurrency with metrics; pin GitHub Actions to commit SHAs
+- Dedicated AddressSanitizer parser harness (`OLSParserSanitizerHarness`) with positive-control verification
+- Strip AppleDouble/`._*` from release archives; archive content validation gate
+- BMAD Method 6.12.4 + TEA 1.27.2 installed for stable local QA (not v7)
+
+### Changed
+
+- Address parsing rejects oversized CIDRs/ranges with overflow-safe counts before allocation
+- Host discovery separated from service enumeration; TCP refusals count as live evidence without claiming an open service
+- Selected network interface is carried into probes; UI explains binding limits and adapter state
+- Progressive enrichment (hostname / MAC / vendor) with generation-guarded cancellation and unbounded event delivery
+- Results table: multi-select, header sort (IP/latency numeric), persisted column layout, custom names, copy/export scopes
+- Empty states and a persistent Local Network permission banner replace repeated alerts
+- OUI lookup: IEEE + compact CSV, longest-prefix match, LAA explanation, in-app import to Application Support
+- Favorites/preferences/history save paths surface errors; imports validate and deduplicate
+- Local scan history with conservative compare (no “left the network” claims from timeouts alone)
+- CI/release workflows restored under `.github/workflows`; checksums regenerated after notarization; keychain cleaned on failure
+
+### Added
+
+- Discovery-probe toggles distinct from service probes; optional ICMP and Bonjour best-effort discovery
+- Export all / filtered / selected rows; Wake-on-LAN and export success/failure feedback
+- Scan history retention controls and Clear History
+
 ## [0.1.0] - 2026-11-02
 
 Initial public early release.

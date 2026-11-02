@@ -38,20 +38,7 @@ Update `CHANGELOG.md` under `[Unreleased]` for user-visible work. Open a PR into
 
 ## 4. Create a release tag and publish a download
 
-**Until Actions workflows are installed** (see below), publish from a verified local package:
-
-```bash
-CREATE_DMG=1 ./Scripts/package-release.sh
-gh release create "v$(tr -d '[:space:]' < VERSION)" \
-  --title "Open LAN Scanner $(tr -d '[:space:]' < VERSION)" \
-  --notes-file path/to/notes.md \
-  --prerelease \
-  dist/OpenLANScanner-*-*.dmg \
-  dist/OpenLANScanner-*-*.zip \
-  dist/SHA256SUMS.txt
-```
-
-**With Actions enabled** (workflows under `.github/workflows/`):
+**Preferred:** workflows under `.github/workflows/` (`ci.yml`, `release.yml`). Templates mirrored in `Docs/github-workflows/`.
 
 ```bash
 # on main, clean tree, VERSION already bumped and pushed
@@ -60,19 +47,24 @@ git push origin main
 git push origin "v$(tr -d '[:space:]' < VERSION)"
 ```
 
-The `Release` workflow builds ZIP + DMG, writes `SHA256SUMS.txt`, and publishes a **prerelease** GitHub Release for `0.x` tags.
+The `Release` workflow runs tests, builds ZIP + DMG, optionally signs/notarizes, **regenerates `SHA256SUMS.txt` after notarization/stapling**, verifies checksums, and publishes a **prerelease** for `0.x` tags. Release notes distinguish ad-hoc, Developer ID signed, and notarized. Skipped notarization is never described as successful. Signing keychains are deleted in an `if: always()` cleanup step.
 
-### Enable GitHub Actions (one-time)
-
-The initial push used a token without the `workflow` scope. Restore workflows:
+**Local package without pushing:**
 
 ```bash
-./Scripts/install-github-workflows.sh
-gh auth refresh -h github.com -s workflow,repo
-git add .github/workflows
-git commit -m "Enable GitHub Actions workflows"
-git push
+CREATE_DMG=1 ./Scripts/package-release.sh
+# After any post-process that changes bytes:
+./Scripts/regenerate-checksums.sh
 ```
+
+## 4b. Sanitizer / archive gates (local)
+
+```bash
+./Scripts/run-asan-harness.sh          # ASan positive control + parser fuzz
+./Scripts/validate-archive-contents.sh # fails on AppleDouble / missing app paths
+```
+
+Package scripts already exclude AppleDouble (`COPYFILE_DISABLE`, `ditto --norsrc --noextattr`) and run the archive gate before checksums.
 
 ## 5. Signing and notarization
 

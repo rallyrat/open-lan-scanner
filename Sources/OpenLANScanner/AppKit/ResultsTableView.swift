@@ -4,21 +4,16 @@ import SwiftUI
 
 struct ResultsTableView: NSViewRepresentable {
     var hosts: [HostRecord]
-    var selection: Binding<String?>
+    @Binding var selection: String?
+    @Binding var selectedIDs: Set<String>
+    var sortColumn: String
+    var sortAscending: Bool
+    var onSortChange: ((String, Bool) -> Void)?
     var onDoubleClick: ((HostRecord) -> Void)?
     var onContextAction: ((HostRecord, ResultsTableContextAction) -> Void)?
 
     enum ResultsTableContextAction {
-        case favorite
-        case copyIP
-        case smb
-        case http
-        case https
-        case ssh
-        case vnc
-        case rdp
-        case wol
-        case ping
+        case favorite, copyIP, copyRows, smb, http, https, ssh, vnc, rdp, wol, ping
     }
 
     func makeCoordinator() -> Coordinator {
@@ -35,7 +30,7 @@ struct ResultsTableView: NSViewRepresentable {
         let table = NSTableView()
         table.delegate = context.coordinator
         table.dataSource = context.coordinator
-        table.allowsMultipleSelection = false
+        table.allowsMultipleSelection = true
         table.allowsColumnResizing = true
         table.allowsColumnReordering = true
         table.usesAlternatingRowBackgroundColors = true
@@ -49,6 +44,7 @@ struct ResultsTableView: NSViewRepresentable {
         for column in Coordinator.makeColumns() {
             table.addTableColumn(column)
         }
+        context.coordinator.applySortIndicators(on: table)
 
         scroll.documentView = table
         context.coordinator.tableView = table
@@ -56,15 +52,71 @@ struct ResultsTableView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
-        context.coordinator.parent = self
-        context.coordinator.hosts = hosts
-        context.coordinator.tableView?.reloadData()
-        if let selected = selection.wrappedValue,
-           let row = hosts.firstIndex(where: { $0.id == selected }) {
-            context.coordinator.tableView?.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        let coordinator = context.coordinator
+        coordinator.parent = self
+        let sorted = Self.sorted(hosts, column: sortColumn, ascending: sortAscending)
+        let previousSelection = selectedIDs
+        let previousScroll = (nsView.documentView as? NSTableView).map {
+            $0.enclosingScrollView?.contentView.bounds.origin.y ?? 0
+        } ?? 0
+
+        let oldIDs = coordinator.hosts.map(\.id)
+        let newIDs = sorted.map(\.id)
+        coordinator.hosts = sorted
+        coordinator.applySortIndicators(on: coordinator.tableView)
+
+        if oldIDs != newIDs {
+            coordinator.tableView?.reloadData()
         } else {
-            context.coordinator.tableView?.deselectAll(nil)
+            // Same IDs: reload visible rows only to refresh cells without jumping.
+            coordinator.tableView?.reloadData()
         }
+
+        if let table = coordinator.tableView {
+            var indexes = IndexSet()
+            for id in previousSelection {
+                if let row = sorted.firstIndex(where: { $0.id == id }) {
+                    indexes.insert(row)
+                }
+            }
+            table.selectRowIndexes(indexes, byExtendingSelection: false)
+            if let y = Optional(previousScroll), let clip = table.enclosingScrollView?.contentView {
+                clip.scroll(to: NSPoint(x: 0, y: y))
+                table.enclosingScrollView?.reflectScrolledClipView(clip)
+            }
+            if let selected = selection, let row = sorted.firstIndex(where: { $0.id == selected }) {
+                table.scrollRowToVisible(row)
+            }
+        }
+    }
+
+    static func sorted(_ hosts: [HostRecord], column: String, ascending: Bool) -> [HostRecord] {
+        let sorted = hosts.sorted { lhs, rhs in
+            let result: ComparisonResult
+            switch column {
+            case "status":
+                result = lhs.status.rawValue.compare(rhs.status.rawValue)
+            case "ip":
+                result = lhs.ip.rawValue < rhs.ip.rawValue ? .orderedAscending
+                    : lhs.ip.rawValue > rhs.ip.rawValue ? .orderedDescending : .orderedSame
+            case "hostname":
+                result = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
+            case "mac":
+                result = (lhs.macAddress ?? "").compare(rhs.macAddress ?? "")
+            case "vendor":
+                result = (lhs.vendor ?? "").localizedCaseInsensitiveCompare(rhs.vendor ?? "")
+            case "latency":
+                let l = lhs.responseTimeMs ?? Double.greatestFiniteMagnitude
+                let r = rhs.responseTimeMs ?? Double.greatestFiniteMagnitude
+                result = l < r ? .orderedAscending : l > r ? .orderedDescending : .orderedSame
+            case "services":
+                result = lhs.services.map(\.name).joined().compare(rhs.services.map(\.name).joined())
+            default:
+                result = .orderedSame
+            }
+            return ascending ? result == .orderedAscending : result == .orderedDescending
+        }
+        return sorted
     }
 
     final class Coordinator: NSObject, NSTableViewDelegate, NSTableViewDataSource {
@@ -78,35 +130,47 @@ struct ResultsTableView: NSViewRepresentable {
         }
 
         static func makeColumns() -> [NSTableColumn] {
+            let defaults = UserDefaults.standard
             let specs: [(String, String, CGFloat)] = [
-                ("status", "Status", 70),
+                ("status", "Status", 90),
                 ("ip", "IP Address", 120),
-                ("hostname", "Hostname", 160),
+                ("hostname", "Name", 160),
                 ("mac", "MAC Address", 130),
                 ("vendor", "Vendor", 160),
-                ("latency", "Response", 80),
+                ("latency", "Response", 90),
                 ("services", "Services", 180)
             ]
             return specs.map { id, title, width in
                 let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
                 column.title = title
-                column.width = width
+                let key = "ols.column.width.\(id)"
+                column.width = CGFloat(defaults.double(forKey: key)).nonZero ?? width
                 column.minWidth = 50
                 column.resizingMask = [.userResizingMask, .autoresizingMask]
                 return column
             }
         }
 
-        func numberOfRows(in tableView: NSTableView) -> Int {
-            hosts.count
+        func applySortIndicators(on table: NSTableView?) {
+            guard let table else { return }
+            for column in table.tableColumns {
+                if column.identifier.rawValue == parent.sortColumn {
+                    table.highlightedTableColumn = column
+                    column.sortDescriptorPrototype = NSSortDescriptor(
+                        key: column.identifier.rawValue,
+                        ascending: parent.sortAscending
+                    )
+                }
+            }
         }
+
+        func numberOfRows(in tableView: NSTableView) -> Int { hosts.count }
 
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
             guard row < hosts.count, let tableColumn else { return nil }
             let host = hosts[row]
             let id = tableColumn.identifier.rawValue
             let text = value(for: host, column: id)
-
             let cellID = NSUserInterfaceItemIdentifier("cell-\(id)")
             let label: NSTextField
             if let reused = tableView.makeView(withIdentifier: cellID, owner: self) as? NSTextField {
@@ -115,10 +179,9 @@ struct ResultsTableView: NSViewRepresentable {
                 label = NSTextField(labelWithString: "")
                 label.identifier = cellID
                 label.lineBreakMode = .byTruncatingTail
-                label.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
-                if id == "hostname" || id == "vendor" || id == "services" || id == "status" {
-                    label.font = NSFont.systemFont(ofSize: 12)
-                }
+                label.font = id == "ip" || id == "mac" || id == "latency"
+                    ? NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+                    : NSFont.systemFont(ofSize: 12)
             }
             label.stringValue = text
             label.toolTip = text == "—" ? nil : text
@@ -127,13 +190,31 @@ struct ResultsTableView: NSViewRepresentable {
             return label
         }
 
+        func tableViewColumnDidResize(_ notification: Notification) {
+            guard let column = notification.userInfo?["NSTableColumn"] as? NSTableColumn else { return }
+            UserDefaults.standard.set(Double(column.width), forKey: "ols.column.width.\(column.identifier.rawValue)")
+        }
+
+        func tableView(_ tableView: NSTableView, didClick tableColumn: NSTableColumn) {
+            let id = tableColumn.identifier.rawValue
+            if parent.sortColumn == id {
+                parent.onSortChange?(id, !parent.sortAscending)
+            } else {
+                parent.onSortChange?(id, true)
+            }
+        }
+
         func tableViewSelectionDidChange(_ notification: Notification) {
             guard let tableView else { return }
-            let row = tableView.selectedRow
-            if row >= 0, row < hosts.count {
-                parent.selection.wrappedValue = hosts[row].id
-            } else {
-                parent.selection.wrappedValue = nil
+            var ids = Set<String>()
+            for row in tableView.selectedRowIndexes {
+                if row >= 0, row < hosts.count {
+                    ids.insert(hosts[row].id)
+                }
+            }
+            parent.selectedIDs = ids
+            parent.selection = ids.count == 1 ? ids.first : tableView.selectedRowIndexes.first.flatMap { row in
+                row < hosts.count ? hosts[row].id : nil
             }
         }
 
@@ -147,6 +228,7 @@ struct ResultsTableView: NSViewRepresentable {
             let items: [(String, Selector)] = [
                 ("Toggle Favorite", #selector(ctxFavorite)),
                 ("Copy IP Address", #selector(ctxCopyIP)),
+                ("Copy Selected Rows", #selector(ctxCopyRows)),
                 ("Open SMB in Finder", #selector(ctxSMB)),
                 ("Open HTTP", #selector(ctxHTTP)),
                 ("Open HTTPS", #selector(ctxHTTPS)),
@@ -173,6 +255,7 @@ struct ResultsTableView: NSViewRepresentable {
 
         @objc func ctxFavorite() { if let h = currentHost() { parent.onContextAction?(h, .favorite) } }
         @objc func ctxCopyIP() { if let h = currentHost() { parent.onContextAction?(h, .copyIP) } }
+        @objc func ctxCopyRows() { if let h = currentHost() { parent.onContextAction?(h, .copyRows) } }
         @objc func ctxSMB() { if let h = currentHost() { parent.onContextAction?(h, .smb) } }
         @objc func ctxHTTP() { if let h = currentHost() { parent.onContextAction?(h, .http) } }
         @objc func ctxHTTPS() { if let h = currentHost() { parent.onContextAction?(h, .https) } }
@@ -185,13 +268,9 @@ struct ResultsTableView: NSViewRepresentable {
         private func value(for host: HostRecord, column: String) -> String {
             switch column {
             case "status":
-                switch host.status {
-                case .online: return host.isFavorite ? "● ★" : "● Online"
-                case .offline: return "○ Offline"
-                case .unknown: return host.isFavorite ? "☆ Fav" : "—"
-                }
+                return host.status.displayLabel + (host.isFavorite ? " ★" : "")
             case "ip": return host.ip.dotted
-            case "hostname": return host.hostname ?? "—"
+            case "hostname": return host.displayName
             case "mac": return host.macAddress ?? "—"
             case "vendor": return host.vendor ?? "—"
             case "latency":
@@ -201,8 +280,7 @@ struct ResultsTableView: NSViewRepresentable {
                 }
                 return "—"
             case "services":
-                if host.services.isEmpty { return "—" }
-                return host.services.map(\.name).joined(separator: ", ")
+                return host.services.isEmpty ? "—" : host.services.map(\.name).joined(separator: ", ")
             default: return "—"
             }
         }
@@ -210,14 +288,15 @@ struct ResultsTableView: NSViewRepresentable {
         private func color(for host: HostRecord, column: String) -> NSColor {
             if column == "status" {
                 switch host.status {
-                case .online: return NSColor(name: nil, dynamicProvider: { _ in
-                    NSColor(srgbRed: 0.11, green: 0.50, blue: 0.29, alpha: 1)
-                })
-                case .offline: return .secondaryLabelColor
-                case .unknown: return .tertiaryLabelColor
+                case .online: return NSColor(srgbRed: 0.11, green: 0.50, blue: 0.29, alpha: 1)
+                case .offline, .unknown: return .secondaryLabelColor
                 }
             }
             return .labelColor
         }
     }
+}
+
+private extension CGFloat {
+    var nonZero: CGFloat? { self > 0 ? self : nil }
 }

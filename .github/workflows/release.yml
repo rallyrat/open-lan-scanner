@@ -1,0 +1,228 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build & publish release
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Parse version from tag
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          FILE_VERSION="$(tr -d '[:space:]' < VERSION)"
+          if [[ "$FILE_VERSION" != "$VERSION" ]]; then
+            echo "VERSION file ($FILE_VERSION) does not match tag ($VERSION)" >&2
+            exit 1
+          fi
+
+      - name: Show toolchain
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer || true
+          xcodebuild -version
+          swift --version
+
+      - name: Import signing certificate (optional)
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo "SIGNED=0" >> "$GITHUB_ENV"
+          echo "NOTARIZED=0" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PATH=" >> "$GITHUB_ENV"
+          if [[ -z "${MACOS_CERTIFICATE_P12_BASE64:-}" ]]; then
+            echo "No Developer ID certificate secret configured; building ad-hoc artifacts."
+            echo "Missing secrets for signed releases: MACOS_CERTIFICATE_P12_BASE64, MACOS_CERTIFICATE_PASSWORD, KEYCHAIN_PASSWORD."
+            exit 0
+          fi
+          if [[ -z "${KEYCHAIN_PASSWORD:-}" ]]; then
+            echo "KEYCHAIN_PASSWORD secret is required when a certificate is provided." >&2
+            exit 1
+          fi
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
+          rm -f "$CERT_PATH"
+          if [[ -z "$IDENTITY" ]]; then
+            echo "Developer ID Application identity not found in imported keychain" >&2
+            exit 1
+          fi
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "SIGNED=1" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "Using signing identity: $IDENTITY"
+
+      - name: Run tests
+        env:
+          DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+          BUILD_PATH: /tmp/open-lan-scanner-build
+        run: swift test --build-path "$BUILD_PATH"
+
+      - name: Build packages
+        env:
+          DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+          BUILD_PATH: /tmp/open-lan-scanner-build
+          CREATE_DMG: "1"
+          VERSION: ${{ steps.ver.outputs.version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          chmod +x Scripts/*.sh
+          if [[ "${SIGNED:-0}" != "1" || -z "${SIGN_IDENTITY:-}" ]]; then
+            export SIGN_IDENTITY="-"
+          fi
+          ./Scripts/package-release.sh
+          test -f dist/OpenLANScanner.app/Contents/Resources/AppIcon.icns
+          test -x dist/OpenLANScanner.app/Contents/MacOS/OpenLANScanner
+          # Architecture label must match lipo output
+          BIN_ARCH="$(lipo -archs dist/OpenLANScanner.app/Contents/MacOS/OpenLANScanner)"
+          echo "Binary architectures: $BIN_ARCH"
+          ls -la dist/OpenLANScanner-*.zip dist/OpenLANScanner-*.dmg
+
+      - name: Notarize (optional)
+        if: env.SIGNED == '1'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          echo "NOTARIZED=0" >> "$GITHUB_ENV"
+          if [[ -z "${APPLE_ID:-}" || -z "${APPLE_TEAM_ID:-}" || -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]]; then
+            echo "Signing present but notarization secrets missing; NOT skipping silently as success."
+            echo "Missing: APPLE_ID, APPLE_TEAM_ID, and/or APPLE_APP_SPECIFIC_PASSWORD."
+            echo "Artifacts remain Developer ID signed but NOT notarized."
+            exit 0
+          fi
+          ARTIFACT="$(ls dist/OpenLANScanner-${VERSION}-*.dmg 2>/dev/null | head -1 || true)"
+          if [[ -z "$ARTIFACT" ]]; then
+            ARTIFACT="$(ls dist/OpenLANScanner-${VERSION}-*.zip | head -1)"
+          fi
+          xcrun notarytool submit "$ARTIFACT" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait
+          if [[ "$ARTIFACT" == *.dmg ]]; then
+            xcrun stapler staple "$ARTIFACT"
+          else
+            echo "ZIP notarized; staple the .app before redistributing if required."
+          fi
+          # Re-sign/staple may change bytes — regenerate checksums AFTER notarization settles.
+          ./Scripts/regenerate-checksums.sh
+          echo "NOTARIZED=1" >> "$GITHUB_ENV"
+
+      - name: Verify artifacts
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          test -f dist/SHA256SUMS.txt
+          (
+            cd dist
+            shasum -a 256 -c SHA256SUMS.txt
+          )
+          codesign -dv --verbose=2 dist/OpenLANScanner.app || true
+          if [[ "${SIGNED:-0}" == "1" ]]; then
+            codesign --verify --deep --strict dist/OpenLANScanner.app
+          fi
+          if [[ "${NOTARIZED:-0}" == "1" ]]; then
+            echo "Notarization completed for this release."
+          elif [[ "${SIGNED:-0}" == "1" ]]; then
+            echo "Signed but not notarized."
+          else
+            echo "Ad-hoc / unsigned distribution build."
+          fi
+          # Ensure archive contains expected resources
+          unzip -l dist/OpenLANScanner-${VERSION}-*.zip | grep -E 'AppIcon.icns|Info.plist|MacOS/OpenLANScanner'
+
+      - name: Build release notes
+        id: notes
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          SIGNED: ${{ env.SIGNED }}
+          NOTARIZED: ${{ env.NOTARIZED }}
+        run: |
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          ARCH_LABEL="$(grep '^ARCH_LABEL=' dist/build-metadata.txt | cut -d= -f2- || echo macos)"
+          {
+            echo "## Open LAN Scanner ${VERSION}"
+            echo
+            echo "Architecture label (from binary): \`${ARCH_LABEL}\`"
+            echo
+            if [[ "${SIGNED}" != "1" ]]; then
+              echo "> **Ad-hoc / unsigned build.** Not notarized. Gatekeeper will warn on first launch."
+              echo "> Install by opening the DMG, dragging to Applications, then right-click → **Open**."
+              echo "> Do **not** disable Gatekeeper globally."
+              echo
+            elif [[ "${NOTARIZED}" != "1" ]]; then
+              echo "> **Developer ID signed, not notarized.** Gatekeeper may still warn until notarization credentials are configured."
+              echo "> Missing notarization secrets: \`APPLE_ID\`, \`APPLE_TEAM_ID\`, \`APPLE_APP_SPECIFIC_PASSWORD\`."
+              echo
+            else
+              echo "This build was **Developer ID signed and notarized**."
+              echo
+            fi
+            echo "### Install"
+            echo
+            echo "1. Download the \`.dmg\` (preferred) or \`.zip\` for your Mac architecture."
+            echo "2. Open the disk image and drag **Open LAN Scanner** to **Applications**."
+            echo "3. On first scan (macOS 15+), allow **Local Network** access when prompted."
+            echo
+            echo "### Checksums"
+            echo
+            echo '```'
+            cat dist/SHA256SUMS.txt
+            echo '```'
+            echo
+            echo "### Verify"
+            echo
+            echo '```bash'
+            echo "shasum -a 256 -c SHA256SUMS.txt"
+            echo '```'
+          } > "$NOTES"
+          echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          name: Open LAN Scanner ${{ steps.ver.outputs.version }}
+          body_path: ${{ steps.notes.outputs.path }}
+          draft: false
+          prerelease: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/OpenLANScanner-*.zip
+            dist/OpenLANScanner-*.dmg
+            dist/SHA256SUMS.txt
+            dist/build-metadata.txt
+
+      - name: Cleanup signing keychain
+        if: always()
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" && -f "${KEYCHAIN_PATH}" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          rm -f "$RUNNER_TEMP/certificate.p12" || true

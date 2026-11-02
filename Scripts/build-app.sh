@@ -29,6 +29,8 @@ if [[ ! -x "$EXECUTABLE" ]]; then
 fi
 
 echo "==> Assembling app bundle at $APP"
+# Prevent AppleDouble (._*) / resource-fork copies on filesystems that support them.
+export COPYFILE_DISABLE=1
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$EXECUTABLE" "$APP/Contents/MacOS/OpenLANScanner"
@@ -50,10 +52,14 @@ if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
   RESOURCE_BUNDLE="$BUILD_PATH/out/Products/${PRODUCTS_CONFIG}/OpenLANScanner_OpenLANScannerCore.bundle"
 fi
 if [[ -d "$RESOURCE_BUNDLE" ]]; then
-  cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
+  # --norsrc/--noextattr avoid reintroducing AppleDouble sidecars into the bundle.
+  ditto --norsrc --noextattr "$RESOURCE_BUNDLE" "$APP/Contents/Resources/$(basename "$RESOURCE_BUNDLE")"
 else
   echo "warning: SPM resource bundle not found; OUI sample may be unavailable" >&2
 fi
+
+# Strip any stray AppleDouble / Finder metadata before signing.
+find "$APP" \( -name '._*' -o -name '.DS_Store' \) -delete 2>/dev/null || true
 
 /usr/bin/plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 /usr/bin/plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP/Contents/Info.plist"

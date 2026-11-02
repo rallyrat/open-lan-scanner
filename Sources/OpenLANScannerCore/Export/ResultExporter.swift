@@ -47,10 +47,20 @@ public enum ResultExporter {
     }
 
     public static func escapeCSV(_ field: String) -> String {
-        if field.contains(",") || field.contains("\"") || field.contains("\n") || field.contains("\r") {
-            let escaped = field.replacingOccurrences(of: "\"", with: "\"\"")
+        // Neutralize spreadsheet formula injection (=, +, -, @, tab, CR), including after
+        // leading whitespace/BOM that Excel still treats as a formula starter.
+        var value = field
+        let trimmedLeading = value.drop(while: { $0 == " " || $0 == "\t" || $0 == "\u{feff}" })
+        if let first = trimmedLeading.unicodeScalars.first {
+            let risky = CharacterSet(charactersIn: "=+-@\t\r")
+            if risky.contains(first) {
+                value = "'" + value
+            }
+        }
+        if value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r") {
+            let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
             return "\"\(escaped)\""
         }
-        return field
+        return value
     }
 }
