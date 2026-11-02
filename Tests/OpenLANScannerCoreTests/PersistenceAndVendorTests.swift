@@ -98,6 +98,13 @@ final class PersistenceAndVendorTests: XCTestCase {
         XCTAssertEqual(result, "Locally administered / randomized MAC")
     }
 
+    func testLoadDefaultDoesNotTrapWithoutBundleModule() {
+        // Must not touch SwiftPM `Bundle.module` (can fatalError in packaged apps).
+        let lookup = OUIVendorLookup.loadDefault()
+        XCTAssertFalse(lookup.metadata.source.isEmpty)
+        XCTAssertGreaterThan(lookup.metadata.entryCount, 0)
+    }
+
     func testScanHistoryCompareConservative() {
         let older = ScanSnapshot(
             targetExpression: "192.168.1.0/24",

@@ -44,7 +44,7 @@ else
   echo "warning: AppIcon.icns missing" >&2
 fi
 
-# SPM resource bundle expected at Bundle.main.resourceURL/OpenLANScanner_OpenLANScannerCore.bundle
+# SPM resource bundle — place where both Xcode-style and classic SwiftPM accessors look.
 PRODUCTS_CONFIG="Release"
 if [[ "$CONFIG" != "release" ]]; then
   PRODUCTS_CONFIG="Debug"
@@ -53,9 +53,46 @@ RESOURCE_BUNDLE="$(dirname "$EXECUTABLE")/OpenLANScanner_OpenLANScannerCore.bund
 if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
   RESOURCE_BUNDLE="$BUILD_PATH/out/Products/${PRODUCTS_CONFIG}/OpenLANScanner_OpenLANScannerCore.bundle"
 fi
+if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
+  # Classic SwiftPM triple layout (seen on some CI runners).
+  RESOURCE_BUNDLE="$(echo "$BUILD_PATH"/*/release/OpenLANScanner_OpenLANScannerCore.bundle | awk '{print $1}')"
+fi
 if [[ -d "$RESOURCE_BUNDLE" ]]; then
+  BUNDLE_NAME="$(basename "$RESOURCE_BUNDLE")"
+  # Keep resources under Contents/ only — files at the .app root are unsealed and break codesign.
   # --norsrc/--noextattr avoid reintroducing AppleDouble sidecars into the bundle.
-  ditto --norsrc --noextattr "$RESOURCE_BUNDLE" "$APP/Contents/Resources/$(basename "$RESOURCE_BUNDLE")"
+  ditto --norsrc --noextattr "$RESOURCE_BUNDLE" "$APP/Contents/Resources/$BUNDLE_NAME"
+  # Also beside the executable for classic SwiftPM layouts that resolve relative to the binary.
+  ditto --norsrc --noextattr "$RESOURCE_BUNDLE" "$APP/Contents/MacOS/$BUNDLE_NAME"
+  # Ensure a loadable Info.plist exists for flat SPM bundles (OUI/ at bundle root).
+  for DEST in \
+    "$APP/Contents/Resources/$BUNDLE_NAME" \
+    "$APP/Contents/MacOS/$BUNDLE_NAME"
+  do
+    if [[ -d "$DEST/OUI" && ! -f "$DEST/Contents/Info.plist" && ! -f "$DEST/Info.plist" ]]; then
+      /usr/bin/plutil -create xml1 "$DEST/Info.plist"
+      /usr/bin/plutil -insert CFBundleIdentifier -string "org.openlanscanner.OpenLANScannerCore" "$DEST/Info.plist"
+      /usr/bin/plutil -insert CFBundleName -string "OpenLANScanner_OpenLANScannerCore" "$DEST/Info.plist"
+      /usr/bin/plutil -insert CFBundlePackageType -string "BNDL" "$DEST/Info.plist"
+    fi
+  done
+  # Direct CSV copy so launch never depends solely on SPM bundle discovery.
+  mkdir -p "$APP/Contents/Resources/OUI"
+  OUI_SAMPLE=""
+  for candidate in \
+    "$RESOURCE_BUNDLE/OUI/oui-sample.csv" \
+    "$RESOURCE_BUNDLE/Contents/Resources/OUI/oui-sample.csv" \
+    "$APP/Contents/Resources/$BUNDLE_NAME/OUI/oui-sample.csv" \
+    "$APP/Contents/Resources/$BUNDLE_NAME/Contents/Resources/OUI/oui-sample.csv"
+  do
+    if [[ -f "$candidate" ]]; then
+      OUI_SAMPLE="$candidate"
+      break
+    fi
+  done
+  if [[ -n "$OUI_SAMPLE" ]]; then
+    cp -f "$OUI_SAMPLE" "$APP/Contents/Resources/OUI/oui-sample.csv"
+  fi
 else
   echo "warning: SPM resource bundle not found; OUI sample may be unavailable" >&2
 fi

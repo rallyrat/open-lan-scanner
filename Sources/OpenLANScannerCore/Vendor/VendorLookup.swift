@@ -73,8 +73,8 @@ public struct OUIVendorLookup: VendorLooking {
         if let imported = try? loadImportedApplicationSupport() {
             return imported
         }
-        if let url = Bundle.module.url(forResource: "oui-sample", withExtension: "csv", subdirectory: nil)
-            ?? Bundle.module.url(forResource: "oui-sample", withExtension: "csv", subdirectory: "OUI"),
+        // Never touch `Bundle.module` — its generated accessor can fatalError in packaged apps.
+        if let url = BundledResources.ouiSampleCSVURL(),
            let lookup = try? OUIVendorLookup(contentsOf: url, sourceLabel: "bundled oui-sample.csv") {
             return lookup
         }

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-02
+
+### Fixed
+
+- Launch crash when opening the app from a release DMG/ZIP: stop using SwiftPM `Bundle.module` for the OUI sample (its accessor could `fatalError` in packaged layouts) and package the CSV under `Contents/Resources`
+
 ## [0.1.1] - 2026-11-02
 
 ### Changed
@@ -62,6 +68,7 @@ Initial public early release.
 - Windows remote shutdown and Radmin are not supported
 - Ad-hoc signed builds are not notarized unless you configure Developer ID secrets
 
-[Unreleased]: https://github.com/rallyrat/open-lan-scanner/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/rallyrat/open-lan-scanner/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/rallyrat/open-lan-scanner/releases/tag/v0.1.2
 [0.1.1]: https://github.com/rallyrat/open-lan-scanner/releases/tag/v0.1.1
 [0.1.0]: https://github.com/rallyrat/open-lan-scanner/releases/tag/v0.1.0

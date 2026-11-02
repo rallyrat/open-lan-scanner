@@ -27,6 +27,12 @@ echo "==> Validating app bundle"
 test -x "$APP/Contents/MacOS/OpenLANScanner"
 test -f "$APP/Contents/Info.plist"
 test -f "$APP/Contents/Resources/AppIcon.icns"
+# OUI sample must be reachable without SwiftPM Bundle.module (launch crash otherwise).
+if [[ ! -f "$APP/Contents/Resources/OUI/oui-sample.csv" \
+   && ! -d "$APP/Contents/Resources/OpenLANScanner_OpenLANScannerCore.bundle" ]]; then
+  echo "error: packaged app is missing OUI sample resources" >&2
+  exit 1
+fi
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 SHORT="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"
