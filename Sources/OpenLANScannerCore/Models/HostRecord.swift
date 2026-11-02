@@ -1,0 +1,99 @@
+import Foundation
+
+public enum HostReachability: String, Sendable, Codable, CaseIterable {
+    case unknown
+    case online
+    case offline
+}
+
+public struct DiscoveredService: Hashable, Sendable, Codable, Identifiable {
+    public var id: String { "\(name):\(port)" }
+    public var name: String
+    public var port: UInt16
+    public var transport: String
+
+    public init(name: String, port: UInt16, transport: String = "tcp") {
+        self.name = name
+        self.port = port
+        self.transport = transport
+    }
+}
+
+public struct HostRecord: Identifiable, Hashable, Sendable, Codable {
+    public var id: String { ip.dotted }
+    public var ip: IPv4Address
+    public var status: HostReachability
+    public var hostname: String?
+    public var macAddress: String?
+    public var vendor: String?
+    public var responseTimeMs: Double?
+    public var latencyKind: LatencyKind
+    public var services: [DiscoveredService]
+    public var isFavorite: Bool
+    public var customName: String?
+    public var notes: String?
+    public var lastSeen: Date?
+
+    public enum LatencyKind: String, Sendable, Codable {
+        case none
+        case tcpProbe
+        case icmp
+    }
+
+    public init(
+        ip: IPv4Address,
+        status: HostReachability = .unknown,
+        hostname: String? = nil,
+        macAddress: String? = nil,
+        vendor: String? = nil,
+        responseTimeMs: Double? = nil,
+        latencyKind: LatencyKind = .none,
+        services: [DiscoveredService] = [],
+        isFavorite: Bool = false,
+        customName: String? = nil,
+        notes: String? = nil,
+        lastSeen: Date? = nil
+    ) {
+        self.ip = ip
+        self.status = status
+        self.hostname = hostname
+        self.macAddress = macAddress
+        self.vendor = vendor
+        self.responseTimeMs = responseTimeMs
+        self.latencyKind = latencyKind
+        self.services = services
+        self.isFavorite = isFavorite
+        self.customName = customName
+        self.notes = notes
+        self.lastSeen = lastSeen
+    }
+
+    public var displayName: String {
+        if let customName, !customName.isEmpty { return customName }
+        if let hostname, !hostname.isEmpty { return hostname }
+        return ip.dotted
+    }
+
+    public mutating func merge(_ other: HostRecord) {
+        precondition(ip == other.ip)
+        if other.status != .unknown { status = other.status }
+        if let hostname = other.hostname, !hostname.isEmpty { self.hostname = hostname }
+        if let mac = other.macAddress, !mac.isEmpty { macAddress = mac }
+        if let vendor = other.vendor, !vendor.isEmpty { self.vendor = vendor }
+        if let ms = other.responseTimeMs {
+            if responseTimeMs == nil || ms < (responseTimeMs ?? .greatestFiniteMagnitude) {
+                responseTimeMs = ms
+                latencyKind = other.latencyKind
+            }
+        }
+        var byPort = Dictionary(uniqueKeysWithValues: services.map { ($0.port, $0) })
+        for service in other.services {
+            byPort[service.port] = service
+        }
+        services = byPort.values.sorted { $0.port < $1.port }
+        if other.isFavorite { isFavorite = true }
+        if let customName = other.customName { self.customName = customName }
+        if let notes = other.notes { self.notes = notes }
+        if let lastSeen = other.lastSeen { self.lastSeen = lastSeen }
+    }
+}

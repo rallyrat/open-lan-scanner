@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest an improvement for Open LAN Scanner
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem you want to solve. Check Docs/FEATURE_PARITY.md for known intentional gaps.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is difficult or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should it work on macOS?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: honesty
+    attributes:
+      label: Discovery honesty
+      options:
+        - label: I understand the app must not fabricate MAC addresses, vendors, latency, or services.
+          required: true
