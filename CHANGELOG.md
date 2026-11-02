@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-02
+
+### Changed
+
+- Native UI polish: layout tokens, interface → range → Scan toolbar, restructured inspector, Preferences tabs, History compare wording, and footer status layout
+- Results table: practical default columns (Name, IP, Status, Services, Response), compact density preference, adaptive status colors, selection sync with the inspector, and clamped column-width persistence
+- User-facing labels for discovery evidence (for example “TCP connection”, “Open TCP port”) instead of implementation identifiers
+- Regenerated fictional demo screenshots (RFC 5737 TEST-NET-3)
+
 ### Security
 
 - Harden Terminal/AppleScript device actions (argv quoting, username allow-list)
@@ -17,26 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hard-limit enrichment concurrency with metrics; pin GitHub Actions to commit SHAs
 - Dedicated AddressSanitizer parser harness (`OLSParserSanitizerHarness`) with positive-control verification
 - Strip AppleDouble/`._*` from release archives; archive content validation gate
-- BMAD Method 6.12.4 + TEA 1.27.2 installed for stable local QA (not v7)
 
-### Changed
+### Fixed
 
-- Address parsing rejects oversized CIDRs/ranges with overflow-safe counts before allocation
-- Host discovery separated from service enumeration; TCP refusals count as live evidence without claiming an open service
-- Selected network interface is carried into probes; UI explains binding limits and adapter state
-- Progressive enrichment (hostname / MAC / vendor) with generation-guarded cancellation and unbounded event delivery
-- Results table: multi-select, header sort (IP/latency numeric), persisted column layout, custom names, copy/export scopes
-- Empty states and a persistent Local Network permission banner replace repeated alerts
-- OUI lookup: IEEE + compact CSV, longest-prefix match, LAA explanation, in-app import to Application Support
-- Favorites/preferences/history save paths surface errors; imports validate and deduplicate
-- Local scan history with conservative compare (no “left the network” claims from timeouts alone)
-- CI/release workflows restored under `.github/workflows`; checksums regenerated after notarization; keychain cleaned on failure
+- Packaging EXIT cleanup no longer fails CI after a successful ZIP/DMG build
+- Swift 5.10 MainActor / Task capture CI failures
 
 ### Added
 
-- Discovery-probe toggles distinct from service probes; optional ICMP and Bonjour best-effort discovery
-- Export all / filtered / selected rows; Wake-on-LAN and export success/failure feedback
-- Scan history retention controls and Clear History
+- Local cleanup tooling (`Scripts/clean-local.sh`) and maintainer follow-ups documentation
+- Demo-mode README screenshots captured without live network probes
 
 ## [0.1.0] - 2026-11-02
 
@@ -63,5 +62,6 @@ Initial public early release.
 - Windows remote shutdown and Radmin are not supported
 - Ad-hoc signed builds are not notarized unless you configure Developer ID secrets
 
-[Unreleased]: https://github.com/rallyrat/open-lan-scanner/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/rallyrat/open-lan-scanner/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/rallyrat/open-lan-scanner/releases/tag/v0.1.1
 [0.1.0]: https://github.com/rallyrat/open-lan-scanner/releases/tag/v0.1.0
