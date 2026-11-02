@@ -38,19 +38,40 @@ Update `CHANGELOG.md` under `[Unreleased]` for user-visible work. Open a PR into
 
 ## 4. Create a release tag and publish a download
 
+**Until Actions workflows are installed** (see below), publish from a verified local package:
+
 ```bash
-# on main, clean tree, VERSION already bumped
+CREATE_DMG=1 ./Scripts/package-release.sh
+gh release create "v$(tr -d '[:space:]' < VERSION)" \
+  --title "Open LAN Scanner $(tr -d '[:space:]' < VERSION)" \
+  --notes-file path/to/notes.md \
+  --prerelease \
+  dist/OpenLANScanner-*-*.dmg \
+  dist/OpenLANScanner-*-*.zip \
+  dist/SHA256SUMS.txt
+```
+
+**With Actions enabled** (workflows under `.github/workflows/`):
+
+```bash
+# on main, clean tree, VERSION already bumped and pushed
 git tag -a "v$(tr -d '[:space:]' < VERSION)" -m "Open LAN Scanner $(tr -d '[:space:]' < VERSION)"
 git push origin main
 git push origin "v$(tr -d '[:space:]' < VERSION)"
 ```
 
-The `Release` workflow builds ZIP + DMG, writes `SHA256SUMS.txt`, and publishes a **prerelease** GitHub Release for `0.x` tags. Watch the Actions run; download artifacts from the Release page once green.
+The `Release` workflow builds ZIP + DMG, writes `SHA256SUMS.txt`, and publishes a **prerelease** GitHub Release for `0.x` tags.
 
-Local dry-run without publishing:
+### Enable GitHub Actions (one-time)
+
+The initial push used a token without the `workflow` scope. Restore workflows:
 
 ```bash
-CREATE_DMG=1 ./Scripts/package-release.sh
+./Scripts/install-github-workflows.sh
+gh auth refresh -h github.com -s workflow,repo
+git add .github/workflows
+git commit -m "Enable GitHub Actions workflows"
+git push
 ```
 
 ## 5. Signing and notarization

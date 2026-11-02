@@ -101,7 +101,17 @@ See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Updates are explicit; noth
 
 ## Screenshots
 
-Screenshot assets will be added under `docs/assets/` as the UI stabilizes. Until then, run the app locally after `./Scripts/build-app.sh`.
+No committed UI screenshots yet (Screen Recording permission was unavailable in the release environment). Run the app locally after `./Scripts/build-app.sh` to inspect the UI. A GitHub social preview image lives at [`docs/assets/github-social-preview.png`](docs/assets/github-social-preview.png) — set it under the repo **Settings → General → Social preview**.
+
+## CI status
+
+Workflow YAML currently lives in [`Docs/github-workflows/`](Docs/github-workflows/) because the publishing token lacked the GitHub `workflow` scope. Restore with:
+
+```bash
+./Scripts/install-github-workflows.sh
+gh auth refresh -h github.com -s workflow,repo
+git add .github/workflows && git commit -m "Enable GitHub Actions workflows" && git push
+```
 
 ## License
 
