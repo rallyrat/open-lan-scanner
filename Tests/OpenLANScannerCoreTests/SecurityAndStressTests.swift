@@ -101,16 +101,17 @@ final class SecurityAndStressTests: XCTestCase {
         prefs.services = []
 
         let first = await engine.scan(addresses: online, preferences: prefs)
-        var firstGeneration: UUID?
+        let generationBox = ConcurrentUUIDBox()
         let consumer1 = Task {
             for await event in first {
-                if firstGeneration == nil { firstGeneration = event.generation }
+                if generationBox.value == nil { generationBox.value = event.generation }
                 if event.progress.completed >= 3 { break }
             }
             await engine.cancel()
         }
         try await Task.sleep(nanoseconds: 40_000_000)
         await consumer1.value
+        let firstGeneration = generationBox.value
 
         let secondOnline = IPv4Address(string: "10.9.9.9")!
         let tcp2 = SimulatedTCPProbe(openPorts: [secondOnline: [80]], latencyMs: 5)
@@ -194,4 +195,9 @@ struct StallingHostnameResolver: HostnameResolving {
         try? await Task.sleep(nanoseconds: UInt64(delayMs) * 1_000_000)
         return "stalled-\(ip.dotted)"
     }
+}
+
+/// Mutable box for Swift 5.10 concurrency checking inside `Task` closures.
+private final class ConcurrentUUIDBox: @unchecked Sendable {
+    var value: UUID?
 }

@@ -4,6 +4,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 @main
+@MainActor
 struct OpenLANScannerApp: App {
     @State private var model = ScanSessionViewModel()
 

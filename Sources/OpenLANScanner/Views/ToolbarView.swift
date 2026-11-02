@@ -1,6 +1,7 @@
 import OpenLANScannerCore
 import SwiftUI
 
+@MainActor
 struct ToolbarView: View {
     @Bindable var model: ScanSessionViewModel
 

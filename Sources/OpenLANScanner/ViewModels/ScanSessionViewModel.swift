@@ -563,7 +563,7 @@ final class ScanSessionViewModel {
         elapsed = 0
         elapsedTimer?.invalidate()
         elapsedTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, let started = self.scanStartedAt else { return }
                 self.elapsed = Date().timeIntervalSince(started)
             }

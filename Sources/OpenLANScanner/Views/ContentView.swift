@@ -3,6 +3,7 @@ import OpenLANScannerCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+@MainActor
 struct ContentView: View {
     @Bindable var model: ScanSessionViewModel
     @State private var showPreferences = false
@@ -293,6 +294,7 @@ struct ContentView: View {
     }
 }
 
+@MainActor
 struct PreferencesView: View {
     @Bindable var model: ScanSessionViewModel
     @Environment(\.dismiss) private var dismiss
@@ -357,6 +359,7 @@ struct PreferencesView: View {
     }
 }
 
+@MainActor
 struct HistoryView: View {
     @Bindable var model: ScanSessionViewModel
     @Environment(\.dismiss) private var dismiss

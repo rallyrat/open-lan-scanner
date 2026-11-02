@@ -1,6 +1,7 @@
 import OpenLANScannerCore
 import SwiftUI
 
+@MainActor
 struct InspectorView: View {
     @Bindable var model: ScanSessionViewModel
     @State private var nameDraft = ""

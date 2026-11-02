@@ -173,23 +173,22 @@ final class ScanEngineTests: XCTestCase {
         prefs.discoveryProbes = [DiscoveryProbeDefinition(port: 80)]
         let stream = await engine.scan(addresses: addresses, preferences: prefs)
 
-        var sawProgress = false
-        var stoppedPhase: ScanPhase?
+        let state = ConcurrentScanState()
         let consumer = Task {
             for await event in stream {
-                sawProgress = true
+                state.sawProgress = true
                 if event.progress.completed >= 2 {
                     await engine.cancel()
                 }
                 if event.progress.isFinished {
-                    stoppedPhase = event.progress.phase
+                    state.stoppedPhase = event.progress.phase
                 }
             }
         }
         await consumer.value
-        XCTAssertTrue(sawProgress)
+        XCTAssertTrue(state.sawProgress)
         XCTAssertLessThan(tcp.probeCount, 200 * 10)
-        XCTAssertEqual(stoppedPhase, .stopped)
+        XCTAssertEqual(state.stoppedPhase, .stopped)
     }
 
     func testSlowConsumerDoesNotDropHosts() async throws {
@@ -304,4 +303,10 @@ final class ScanEngineTests: XCTestCase {
         XCTAssertEqual(host?.latencyKind, .icmp)
         XCTAssertTrue(host?.evidence.contains(where: { $0.kind == .icmpEcho }) == true)
     }
+}
+
+/// Mutable box for Swift 5.10 concurrency checking inside `Task` closures.
+private final class ConcurrentScanState: @unchecked Sendable {
+    var sawProgress = false
+    var stoppedPhase: ScanPhase?
 }
