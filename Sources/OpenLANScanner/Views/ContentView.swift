@@ -6,16 +6,15 @@ import UniformTypeIdentifiers
 @MainActor
 struct ContentView: View {
     @Bindable var model: ScanSessionViewModel
-    @State private var showPreferences = false
     @State private var showHistory = false
-    @State private var sortColumn = UserDefaults.standard.string(forKey: "ols.sort.column") ?? "ip"
+    @State private var sortColumn = UserDefaults.standard.string(forKey: "ols.sort.column") ?? "hostname"
     @State private var sortAscending = UserDefaults.standard.object(forKey: "ols.sort.ascending") as? Bool ?? true
 
     var body: some View {
         VStack(spacing: 0) {
             ToolbarView(model: model)
             if let warning = model.permissionWarning {
-                HStack {
+                HStack(spacing: OLSTheme.controlGap) {
                     Image(systemName: "exclamationmark.triangle.fill")
                     Text(warning)
                         .font(.caption)
@@ -29,7 +28,7 @@ struct ContentView: View {
                     Button("Dismiss") { model.permissionWarning = nil }
                         .buttonStyle(.borderless)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, OLSTheme.contentInset)
                 .padding(.vertical, 6)
                 .background(OLSTheme.warning.opacity(0.15))
             }
@@ -39,7 +38,7 @@ struct ContentView: View {
                     Spacer()
                     Button("OK") { model.actionBanner = nil }.buttonStyle(.borderless)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, OLSTheme.contentInset)
                 .padding(.vertical, 4)
                 .background(OLSTheme.surface)
             }
@@ -54,7 +53,7 @@ struct ContentView: View {
             statusBar
         }
         .background(OLSTheme.background)
-        .frame(minWidth: 880, minHeight: 520)
+        .frame(minWidth: OLSTheme.windowMinWidth, minHeight: OLSTheme.windowMinHeight)
         .alert("Large range", isPresented: $model.showLargeRangeConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Scan \(model.pendingAddressCount) addresses") {
@@ -70,9 +69,6 @@ struct ContentView: View {
             Button("OK", role: .cancel) { model.errorMessage = nil }
         } message: {
             Text(model.errorMessage ?? "")
-        }
-        .sheet(isPresented: $showPreferences) {
-            PreferencesView(model: model)
         }
         .sheet(isPresented: $showHistory) {
             HistoryView(model: model)
@@ -94,6 +90,9 @@ struct ContentView: View {
                     selectedIDs: $model.selectedHostIDs,
                     sortColumn: sortColumn,
                     sortAscending: sortAscending,
+                    compactDensity: model.compactTableDensity,
+                    showMACColumn: model.showMACColumn,
+                    showVendorColumn: model.showVendorColumn,
                     onSortChange: { column, ascending in
                         sortColumn = column
                         sortAscending = ascending
@@ -113,7 +112,7 @@ struct ContentView: View {
                     },
                     onContextAction: handleContext
                 )
-                .frame(minWidth: 520, minHeight: 280)
+                .frame(minWidth: 480, minHeight: 280)
             }
         }
     }
@@ -130,7 +129,7 @@ struct ContentView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: OLSTheme.relatedGap) {
             Image(systemName: emptyIcon)
                 .font(.system(size: 28, weight: .regular))
                 .foregroundStyle(OLSTheme.accent)
@@ -141,14 +140,14 @@ struct ContentView: View {
                 .foregroundStyle(OLSTheme.mutedText)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 440)
-            HStack {
+            HStack(spacing: OLSTheme.controlGap) {
                 ForEach(emptyActions, id: \.0) { title, action in
                     Button(title, action: action)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+        .padding(OLSTheme.contentInset)
     }
 
     private var emptyIcon: String {
@@ -182,7 +181,7 @@ struct ContentView: View {
         case .scanning:
             return "Live results appear as hosts respond. Stop cancels in-flight probes."
         case .noFilterMatches:
-            return "Clear search or filter toggles to see discovered hosts."
+            return "Clear search or filters to see discovered hosts."
         case .noDevices:
             return "No live evidence in this range. That does not prove hosts are offline — try ICMP, wider discovery ports, or a different interface."
         default:
@@ -214,36 +213,32 @@ struct ContentView: View {
     }
 
     private var statusBar: some View {
-        HStack(spacing: 12) {
-            if model.isScanning {
-                ProgressView(value: model.progress.fraction)
-                    .frame(width: 120)
-            }
+        HStack(spacing: OLSTheme.relatedGap) {
             Text(model.statusMessage)
                 .font(.caption)
                 .foregroundStyle(OLSTheme.mutedText)
                 .lineLimit(1)
-            if let note = model.progress.interfaceNote {
-                Text(note)
-                    .font(.caption2)
-                    .foregroundStyle(OLSTheme.mutedText)
-                    .lineLimit(1)
+                .help(model.statusMessage)
+            Spacer(minLength: OLSTheme.controlGap)
+            if model.isScanning {
+                ProgressView(value: model.progress.fraction)
+                    .frame(width: 100)
+                    .help("Scan progress")
             }
-            Spacer()
-            Text("\(model.filteredHosts.count) shown · \(model.progress.onlineCount) responded")
+            Text("\(model.filteredHosts.count) shown · \(model.filteredHosts.filter { $0.status == .online }.count) responded")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(OLSTheme.mutedText)
+                .lineLimit(1)
             Text(elapsedLabel)
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(OLSTheme.mutedText)
+                .lineLimit(1)
             Button("History") { showHistory = true }
                 .buttonStyle(.plain)
                 .font(.caption)
-            Button("Preferences…") { showPreferences = true }
-                .buttonStyle(.plain)
-                .font(.caption)
+                .help("Saved scans")
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, OLSTheme.contentInset)
         .padding(.vertical, 6)
         .background(OLSTheme.surface)
     }
@@ -254,6 +249,9 @@ struct ContentView: View {
     }
 
     private func handleContext(_ host: HostRecord, _ action: ResultsTableView.ResultsTableContextAction) {
+        // Ensure inspector targets the context host.
+        model.selectedHostID = host.id
+        model.selectedHostIDs = [host.id]
         switch action {
         case .favorite:
             model.toggleFavorite(host)
@@ -291,128 +289,5 @@ struct ContentView: View {
         case .ping:
             DeviceActions.ping(ip: host.ip)
         }
-    }
-}
-
-@MainActor
-struct PreferencesView: View {
-    @Bindable var model: ScanSessionViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Scan Preferences")
-                .font(.title2.weight(.semibold))
-            Form {
-                Stepper(value: $model.preferences.concurrency, in: 1...512) {
-                    Text("Discovery concurrency: \(model.preferences.concurrency)")
-                }
-                Stepper(value: $model.preferences.enrichmentConcurrency, in: 1...64) {
-                    Text("Enrichment concurrency: \(model.preferences.enrichmentConcurrency)")
-                }
-                Stepper(value: $model.preferences.connectTimeoutMs, in: 50...5000, step: 50) {
-                    Text("Connect timeout: \(model.preferences.connectTimeoutMs) ms")
-                }
-                Stepper(value: $model.preferences.probeRetries, in: 1...5) {
-                    Text("Retries: \(model.preferences.probeRetries)")
-                }
-                Toggle("Resolve hostnames", isOn: $model.preferences.resolveHostnames)
-                Toggle("Look up neighbor MAC addresses", isOn: $model.preferences.lookupNeighbors)
-                Toggle("Look up vendors (OUI)", isOn: $model.preferences.lookupVendors)
-                Toggle("Attempt ICMP echo (best-effort)", isOn: $model.preferences.attemptICMP)
-                Toggle("Browse Bonjour services (best-effort)", isOn: $model.preferences.browseBonjour)
-                Section("Discovery ports (live-host evidence; not listed as services)") {
-                    ForEach($model.preferences.discoveryProbes) { $probe in
-                        Toggle("TCP \(probe.port)", isOn: $probe.enabled)
-                    }
-                }
-                Section("Service probes (listed when open)") {
-                    ForEach($model.preferences.services) { $service in
-                        Toggle("\(service.name) (\(service.port))", isOn: $service.enabled)
-                    }
-                }
-                Section("Vendor database") {
-                    Text(model.vendorDatasetDescription)
-                        .font(.caption)
-                        .foregroundStyle(OLSTheme.mutedText)
-                    Button("Import IEEE / OUI CSV…") { model.importOUIDataset() }
-                }
-                Section("History") {
-                    Stepper(value: $model.historyRetention, in: 5...200) {
-                        Text("Keep \(model.historyRetention) scans")
-                    }
-                    Button("Clear History", role: .destructive) { model.clearHistory() }
-                }
-            }
-            .formStyle(.grouped)
-            HStack {
-                Spacer()
-                Button("Close") {
-                    model.savePreferences()
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20)
-        .frame(width: 520, height: 640)
-    }
-}
-
-@MainActor
-struct HistoryView: View {
-    @Bindable var model: ScanSessionViewModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var selectedOlder: UUID?
-    @State private var selectedNewer: UUID?
-    @State private var comparison: ScanComparison?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Scan History")
-                .font(.title2.weight(.semibold))
-            Text("Snapshots are stored only on this Mac. “No response” compared to a prior scan does not prove a device left the network.")
-                .font(.caption)
-                .foregroundStyle(OLSTheme.mutedText)
-            List(model.history, selection: $selectedNewer) { snap in
-                VStack(alignment: .leading) {
-                    Text(snap.createdAt.formatted())
-                    Text("\(snap.targetExpression) · \(snap.onlineCount) responded / \(snap.probedCount) probed")
-                        .font(.caption)
-                        .foregroundStyle(OLSTheme.mutedText)
-                }
-                .tag(snap.id)
-            }
-            HStack {
-                Picker("Compare older", selection: $selectedOlder) {
-                    Text("—").tag(Optional<UUID>.none)
-                    ForEach(model.history) { snap in
-                        Text(snap.createdAt.formatted()).tag(Optional(snap.id))
-                    }
-                }
-                Button("Compare") {
-                    comparison = model.compareHistory(older: selectedOlder, newer: selectedNewer)
-                }
-                Spacer()
-                Button("Close") { dismiss() }
-            }
-            if let comparison {
-                GroupBox("Comparison") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(comparison.uncertainMatches, id: \.self) {
-                            Text("Note: \($0)").font(.caption).foregroundStyle(OLSTheme.warning)
-                        }
-                        Text("Newly observed: \(comparison.newlyObserved.map(\.ip.dotted).joined(separator: ", ") )")
-                            .font(.caption)
-                        Text("Previously observed, no response this scan: \(comparison.previouslyObservedNoResponse.map(\.ip.dotted).joined(separator: ", ") )")
-                            .font(.caption)
-                        Text("Changed services: \(comparison.changedServices.count)")
-                            .font(.caption)
-                    }
-                }
-            }
-        }
-        .padding(20)
-        .frame(width: 560, height: 480)
     }
 }

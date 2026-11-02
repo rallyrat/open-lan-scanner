@@ -12,12 +12,12 @@ struct OpenLANScannerApp: App {
     var body: some Scene {
         WindowGroup("Open LAN Scanner") {
             ContentView(model: model)
-                .frame(minWidth: 1100, minHeight: 680)
+                .frame(minWidth: OLSTheme.windowMinWidth, minHeight: OLSTheme.windowMinHeight)
                 .onAppear {
                     applyDemoLaunchIfNeeded()
                 }
         }
-        .defaultSize(width: 1180, height: 720)
+        .defaultSize(width: OLSTheme.windowDefaultWidth, height: OLSTheme.windowDefaultHeight)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .pasteboard) {
@@ -134,7 +134,7 @@ struct OpenLANScannerApp: App {
     private func exportDemoScreenshots(to directory: URL) async {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         // Allow SwiftUI + AppKit table to settle before capturing.
-        try? await Task.sleep(nanoseconds: 900_000_000)
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
 
         let appearance = NSApp.effectiveAppearance
         defer { NSApp.appearance = appearance }
@@ -142,16 +142,14 @@ struct OpenLANScannerApp: App {
         // 1) Main results + inspector (light) — NAS selected for SMB/SSH services
         NSApp.appearance = NSAppearance(named: .aqua)
         model.showFavoritesOnly = false
-        model.selectDemoHost(ip: "203.0.113.20")
         model.showInspector = true
-        try? await Task.sleep(nanoseconds: 700_000_000)
+        await settleSelection(ip: "203.0.113.20")
         try? DemoWindowCapture.captureKeyWindowPNG(
             to: directory.appendingPathComponent("01-main-results.png")
         )
 
         // 2) Laptop selected — inspector actions + hostname-focused detail
-        model.selectDemoHost(ip: "203.0.113.42")
-        try? await Task.sleep(nanoseconds: 700_000_000)
+        await settleSelection(ip: "203.0.113.42")
         try? DemoWindowCapture.captureKeyWindowPNG(
             to: directory.appendingPathComponent("02-inspector-actions.png")
         )
@@ -159,8 +157,7 @@ struct OpenLANScannerApp: App {
         // 3) Favorites filter in dark appearance
         NSApp.appearance = NSAppearance(named: .darkAqua)
         model.showFavoritesOnly = true
-        model.selectDemoHost(ip: "203.0.113.1")
-        try? await Task.sleep(nanoseconds: 700_000_000)
+        await settleSelection(ip: "203.0.113.1")
         try? DemoWindowCapture.captureKeyWindowPNG(
             to: directory.appendingPathComponent("03-favorites-dark.png")
         )
@@ -169,6 +166,30 @@ struct OpenLANScannerApp: App {
         let marker = directory.appendingPathComponent("EXPORT_DONE")
         try? "ok\n".write(to: marker, atomically: true, encoding: .utf8)
         NSApp.terminate(nil)
+    }
+
+    /// Apply demo selection and wait until model + next run-loop turns agree (avoids capture races).
+    private func settleSelection(ip: String) async {
+        // Clear first so AppKit cannot briefly show a previous multi-selection.
+        model.selectedHostID = nil
+        model.selectedHostIDs = []
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        model.selectDemoHost(ip: ip)
+        for _ in 0..<12 {
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if model.selectedHostID == ip, model.selectedHostIDs == [ip],
+               model.selectedHost?.ip.dotted == ip {
+                break
+            }
+            model.selectDemoHost(ip: ip)
+        }
+        // Extra settle so AppKit table highlight catches up with bindings.
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        if model.selectedHost?.ip.dotted != ip {
+            fputs("warning: demo selection did not settle on \(ip)\n", stderr)
+        }
     }
 
     private func exportCSV(_ scope: ScanSessionViewModel.ExportScope) {

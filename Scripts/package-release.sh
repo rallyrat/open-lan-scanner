@@ -53,9 +53,12 @@ STAGE="$DIST/stage.$$"
 DMG_ROOT=""
 TMP_DMG=""
 cleanup_packaging_temps() {
-  [[ -n "${STAGE:-}" ]] && rm -rf -- "$STAGE"
-  [[ -n "${DMG_ROOT:-}" ]] && rm -rf -- "$DMG_ROOT"
-  [[ -n "${TMP_DMG:-}" ]] && rm -f -- "$TMP_DMG"
+  # Use if/fi (not `[[ ]] && rm`) so an empty path cannot make the EXIT trap
+  # return 1 under `set -e` and fail an otherwise successful package run.
+  if [[ -n "${STAGE:-}" ]]; then rm -rf -- "$STAGE"; fi
+  if [[ -n "${DMG_ROOT:-}" ]]; then rm -rf -- "$DMG_ROOT"; fi
+  if [[ -n "${TMP_DMG:-}" ]]; then rm -f -- "$TMP_DMG"; fi
+  return 0
 }
 trap cleanup_packaging_temps EXIT
 
@@ -110,13 +113,13 @@ STAGE=""
   cat SHA256SUMS.txt
 )
 
-# Signing status note for humans
-if codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc\|flags=0x0\|Signature=adhoc\|Authority=(absent)"; then
+# Signing status note for humans (grep non-match must not trip `pipefail`).
+SIGN_STATE="signed-other"
+CS_OUT="$(codesign -dv --verbose=2 "$APP" 2>&1 || true)"
+if printf '%s\n' "$CS_OUT" | grep -Eq 'Signature=adhoc|flags=0x0|Authority=\(absent\)'; then
   SIGN_STATE="adhoc-or-unsigned"
-elif codesign -dv --verbose=2 "$APP" 2>&1 | grep -q "Developer ID Application"; then
+elif printf '%s\n' "$CS_OUT" | grep -Eq 'Developer ID Application'; then
   SIGN_STATE="developer-id"
-else
-  SIGN_STATE="signed-other"
 fi
 echo "SIGN_STATE=$SIGN_STATE" > "$DIST/build-metadata.txt"
 echo "VERSION=$VERSION" >> "$DIST/build-metadata.txt"
