@@ -64,7 +64,8 @@ struct InspectorView: View {
     @ViewBuilder
     private func grid(_ host: HostRecord) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
-            row("Status", host.status.rawValue)
+            row("Status", host.status.displayLabel)
+            row("Name", host.displayName)
             row("IP", host.ip.dotted)
             row("Hostname", host.hostname ?? "—")
             row("MAC", host.macAddress ?? "—")
@@ -76,6 +77,12 @@ struct InspectorView: View {
             row(
                 "Services",
                 host.services.isEmpty ? "—" : host.services.map { "\($0.name):\($0.port)" }.joined(separator: ", ")
+            )
+            row(
+                "Evidence",
+                host.evidence.isEmpty
+                    ? "Not observed"
+                    : host.evidence.map { "\($0.kind.rawValue)" }.joined(separator: ", ")
             )
         }
         .font(.system(size: 12))

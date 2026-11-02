@@ -51,11 +51,14 @@ fi
 STAGE="$DIST/stage"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
-cp -R "$APP" "$STAGE/"
+export COPYFILE_DISABLE=1
+ditto --norsrc --noextattr "$APP" "$STAGE/OpenLANScanner.app"
+find "$STAGE" \( -name '._*' -o -name '.DS_Store' \) -delete 2>/dev/null || true
 
 ZIP="$DIST/OpenLANScanner-${VERSION}-${ARCH_LABEL}.zip"
 rm -f "$ZIP"
-ditto -c -k --keepParent "$STAGE/OpenLANScanner.app" "$ZIP"
+# --norsrc/--noextattr keep AppleDouble out of the zip payload.
+ditto -c -k --norsrc --noextattr --keepParent "$STAGE/OpenLANScanner.app" "$ZIP"
 echo "==> Created $ZIP"
 
 DMG=""
@@ -65,7 +68,8 @@ if [[ "$CREATE_DMG" == "1" ]]; then
   DMG_ROOT="$DIST/dmg-root"
   rm -rf "$DMG_ROOT"
   mkdir -p "$DMG_ROOT"
-  cp -R "$APP" "$DMG_ROOT/"
+  ditto --norsrc --noextattr "$APP" "$DMG_ROOT/OpenLANScanner.app"
+  find "$DMG_ROOT" \( -name '._*' -o -name '.DS_Store' \) -delete 2>/dev/null || true
   ln -s /Applications "$DMG_ROOT/Applications"
   # RW temp then convert for a simple installer disk image
   TMP_DMG="$DIST/tmp-ols.dmg"
@@ -77,7 +81,10 @@ if [[ "$CREATE_DMG" == "1" ]]; then
   echo "==> Created $DMG"
 fi
 
-# Checksums
+# Reject AppleDouble / missing required paths before checksums settle.
+"$ROOT/Scripts/validate-archive-contents.sh" "$DIST"
+
+# Checksums only after final downloadable bytes are settled
 (
   cd "$DIST"
   rm -f SHA256SUMS.txt

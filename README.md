@@ -17,13 +17,15 @@ Native, open-source **macOS LAN scanner**. Scan local IPv4 ranges, review live h
 
 ## Features
 
-- Interface picker with suggested subnet; CIDR, ranges, and single IPv4 targets
-- Bounded concurrent TCP discovery with cancel, progress, and live results
-- Columns: status, IP (numeric sort), hostname, MAC (when available), vendor, probe latency, services
-- Filters: search, online-only, favorites
+- Interface picker with readable name, local IP, and subnet; CIDR, ranges, and single IPv4 targets
+- Host discovery separate from service probes (TCP open/refuse, optional ICMP, best-effort Bonjour)
+- Bounded concurrent scanning with cancel, progress, live results, and progressive enrichment
+- Columns: status, IP (numeric sort), display name, MAC, vendor, probe latency, services — multi-select and copy
+- Filters: search, online-only, favorites; empty states with recovery actions
 - Actions: SMB, HTTP/HTTPS, SSH, VNC, RDP (if a client is installed), Wake-on-LAN, Ping, Traceroute
-- Favorites with notes; CSV and JSON export
-- Local preferences only — no telemetry
+- Favorites with notes; CSV/JSON export for all, filtered, or selected rows
+- Local scan history with conservative compare; OUI import to Application Support
+- Local preferences only — no telemetry or cloud backend
 
 ## Install (releases)
 
@@ -50,13 +52,32 @@ shasum -a 256 -c SHA256SUMS.txt
 | **Local Network** (macOS 15+) | First LAN probe / Bonjour use — allow in System Settings → Privacy & Security → Local Network if scans find nothing |
 | Apple Events / Automation (optional) | Opening Terminal for Ping / SSH |
 
+## Requirements
+
+- **macOS 14.0+**
+- Full **Xcode** app (not Command Line Tools alone) for local builds
+- Architecture: build produces **arm64**, **x86_64**, or **universal** depending on the host/`ARCHS`; release artifact names are derived from the binary via `lipo`
+
+## Signing status
+
+| Build | Meaning |
+|---|---|
+| Ad-hoc / unsigned | Default local and CI without secrets. Gatekeeper warns; use right-click → Open. |
+| Developer ID signed | Requires `MACOS_CERTIFICATE_*` secrets. Still not Gatekeeper-trusted until notarized. |
+| Notarized | Requires Apple ID notarization secrets. Release notes never claim notarization when it was skipped. |
+
+Ordinary `swift build` / `./Scripts/build-app.sh` never requires Apple credentials.
+
 ## Limitations
 
-- A failed probe does **not** prove a host is offline.
-- MAC addresses are typically available only for **directly connected** neighbors.
-- Response times are **TCP connect probe** latency unless noted otherwise.
+- A failed probe does **not** prove a host is offline (“No response” / “Not observed”).
+- Neighbor-cache MACs alone are not treated as proof a device is currently online.
+- Interface binding uses supported Network.framework constraints; some routes cannot be forced — the UI explains this.
+- Bonjour discovery is best-effort and often hostname-oriented; it is not a complete inventory.
+- Response times are **TCP connect probe** latency unless an ICMP sample succeeds.
 - Windows remote shutdown and Radmin are **not** supported ([notes](Docs/REMOTE_SHUTDOWN.md)).
 - Early `0.x` software — expect rough edges.
+- No committed live-network screenshots yet (sensitive LAN details); run the app locally to review UI.
 
 ## Build from source
 
@@ -91,27 +112,21 @@ CREATE_DMG=1 ./Scripts/package-release.sh
 
 ## OUI vendor data
 
-A small sample OUI table is bundled. Optional full IEEE MA-L download:
+A small verified sample OUI table is bundled (compact CSV). Import a larger IEEE MA-L / assignment CSV from **Preferences → Vendor database**, or:
 
 ```bash
 ./Scripts/download-oui.sh
 ```
 
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Updates are explicit; nothing uploads your network data.
+Imported data is stored under Application Support and kept if a later import fails. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before redistributing large IEEE datasets. Nothing uploads your network data.
 
 ## Screenshots
 
-No committed UI screenshots yet (Screen Recording permission was unavailable in the release environment). Run the app locally after `./Scripts/build-app.sh` to inspect the UI. A GitHub social preview image lives at [`docs/assets/github-social-preview.png`](docs/assets/github-social-preview.png) — set it under the repo **Settings → General → Social preview**.
+Live-network screenshots are not committed (LAN details are sensitive). After `./Scripts/build-app.sh`, open `dist/OpenLANScanner.app` for UI review. A GitHub social preview image lives at [`docs/assets/github-social-preview.png`](docs/assets/github-social-preview.png).
 
-## CI status
+## CI
 
-Workflow YAML currently lives in [`Docs/github-workflows/`](Docs/github-workflows/) because the publishing token lacked the GitHub `workflow` scope. Restore with:
-
-```bash
-./Scripts/install-github-workflows.sh
-gh auth refresh -h github.com -s workflow,repo
-git add .github/workflows && git commit -m "Enable GitHub Actions workflows" && git push
-```
+Workflows live in [`.github/workflows/`](.github/workflows/) (`ci.yml`, `release.yml`). Templates also remain under [`Docs/github-workflows/`](Docs/github-workflows/). Tag `v*` releases validate `VERSION`, run tests, package ZIP/DMG, optionally sign/notarize, then regenerate checksums on final bytes.
 
 ## License
 

@@ -26,3 +26,13 @@ notary-log.json
 **/__pycache__/
 *.pyc
 .Python
+
+# BMAD Method (stable v6) — keep `_bmad/` install metadata; ignore personal overrides,
+# generated artifacts, and the local Cursor skill mirror under `.agents/` (re-rendered).
+_bmad/config.user.toml
+_bmad/custom/config.user.toml
+_bmad/custom/*.user.toml
+_bmad-output/
+!_bmad-output/.gitkeep
+!_bmad-output/test-artifacts/.gitkeep
+.agents/

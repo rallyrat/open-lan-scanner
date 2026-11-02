@@ -5,6 +5,7 @@ public enum DeviceActionError: Error, LocalizedError, Sendable {
     case missingMAC
     case missingApplication(String)
     case unsupported(String)
+    case invalidUsername(String)
 
     public var errorDescription: String? {
         switch self {
@@ -14,12 +15,23 @@ public enum DeviceActionError: Error, LocalizedError, Sendable {
             return "\(name) is not installed."
         case .unsupported(let detail):
             return detail
+        case .invalidUsername(let value):
+            return "Username contains unsupported characters: \(value)"
         }
     }
 }
 
 @MainActor
 public enum DeviceActions {
+    /// Allowed remote login name characters for Terminal `ssh` invocations.
+    nonisolated public static func isSafeRemoteUsername(_ username: String) -> Bool {
+        guard !username.isEmpty, username.count <= 64 else { return false }
+        return username.unicodeScalars.allSatisfy { scalar in
+            CharacterSet.alphanumerics.contains(scalar)
+                || scalar == "." || scalar == "_" || scalar == "-"
+        }
+    }
+
     public static func openSMB(ip: IPv4Address) {
         openURL(URL(string: "smb://\(ip.dotted)")!)
     }
@@ -50,7 +62,6 @@ public enum DeviceActions {
             if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
                 let config = NSWorkspace.OpenConfiguration()
                 NSWorkspace.shared.openApplication(at: url, configuration: config)
-                // Still tell the user they may need to enter the host manually.
                 throw DeviceActionError.unsupported(
                     "Opened Microsoft Remote Desktop. Connect to \(ip.dotted) manually if a session did not start."
                 )
@@ -62,20 +73,28 @@ public enum DeviceActions {
     }
 
     public static func openSSH(ip: IPv4Address, username: String = NSUserName()) {
-        let command = "ssh \(username)@\(ip.dotted)"
-        runInTerminal(command)
+        let user: String
+        if isSafeRemoteUsername(username) {
+            user = username
+        } else if isSafeRemoteUsername(NSUserName()) {
+            user = NSUserName()
+        } else {
+            user = "user"
+        }
+        // argv-style tokens only; IPv4Address.dotted is numeric dotted-quad.
+        runInTerminal(argv: ["ssh", "\(user)@\(ip.dotted)"])
     }
 
     public static func openTelnet(ip: IPv4Address) {
-        runInTerminal("telnet \(ip.dotted)")
+        runInTerminal(argv: ["telnet", ip.dotted])
     }
 
     public static func ping(ip: IPv4Address) {
-        runInTerminal("/sbin/ping -c 4 \(ip.dotted)")
+        runInTerminal(argv: ["/sbin/ping", "-c", "4", ip.dotted])
     }
 
     public static func traceroute(ip: IPv4Address) {
-        runInTerminal("traceroute \(ip.dotted)")
+        runInTerminal(argv: ["traceroute", ip.dotted])
     }
 
     public static func copyToPasteboard(_ strings: [String]) {
@@ -89,26 +108,47 @@ public enum DeviceActions {
         try await WakeOnLAN.send(mac: mac)
     }
 
+    /// Shell-quote a single argument for embedding in a Terminal `do script` string.
+    nonisolated public static func shellQuote(_ argument: String) -> String {
+        "'" + argument.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    /// Escape a string for inclusion inside an AppleScript double-quoted literal.
+    nonisolated public static func appleScriptStringLiteral(_ value: String) -> String {
+        var out = "\""
+        for ch in value {
+            switch ch {
+            case "\\": out += "\\\\"
+            case "\"": out += "\\\""
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            default: out.append(ch)
+            }
+        }
+        out += "\""
+        return out
+    }
+
     @discardableResult
     private static func openURL(_ url: URL) -> Bool {
         NSWorkspace.shared.open(url)
     }
 
-    private static func runInTerminal(_ command: String) {
-        let escaped = command
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
+    /// Runs a fixed argv in Terminal. Arguments are shell-quoted; never interpolate free-form text.
+    private static func runInTerminal(argv: [String]) {
+        precondition(!argv.isEmpty)
+        let command = argv.map(shellQuote).joined(separator: " ")
         let script = """
         tell application "Terminal"
           activate
-          do script "\(escaped)"
+          do script \(appleScriptStringLiteral(command))
         end tell
         """
         if let appleScript = NSAppleScript(source: script) {
             var error: NSDictionary?
             appleScript.executeAndReturnError(&error)
             if error != nil {
-                // Fallback: open Terminal only.
                 if let terminal = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") {
                     NSWorkspace.shared.openApplication(at: terminal, configuration: NSWorkspace.OpenConfiguration())
                 }

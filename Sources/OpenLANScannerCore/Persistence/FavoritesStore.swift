@@ -24,6 +24,34 @@ public struct FavoriteDevice: Identifiable, Hashable, Sendable, Codable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
+
+    /// Validates MACs when present and deduplicates by IP (last write wins). Rejects empty imports that would crash unique-key dictionaries.
+    public static func validateAndDeduplicate(_ items: [FavoriteDevice]) throws -> [FavoriteDevice] {
+        var map: [UInt32: FavoriteDevice] = [:]
+        for item in items {
+            if let mac = item.macAddress, !mac.isEmpty {
+                guard MACAddressParsing.parse(mac) != nil else {
+                    throw FavoritesError.invalidMAC(mac)
+                }
+            }
+            map[item.ip.rawValue] = item
+        }
+        return Array(map.values).sorted { $0.ip < $1.ip }
+    }
+}
+
+public enum FavoritesError: LocalizedError {
+    case invalidMAC(String)
+    case malformedImport(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidMAC(let mac):
+            return "Invalid MAC address in favorites import: \(mac)"
+        case .malformedImport(let detail):
+            return "Malformed favorites import: \(detail)"
+        }
+    }
 }
 
 public protocol FavoritesStoring: Sendable {
@@ -52,19 +80,29 @@ public struct FileFavoritesStore: FavoritesStoring {
         return FileFavoritesStore(fileURL: dir.appendingPathComponent("favorites.json"))
     }
 
+    public static let maxFileByteCount = 2 * 1024 * 1024
+
     public func load() throws -> [FavoriteDevice] {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
+        let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        if let size = attrs[.size] as? NSNumber, size.intValue > Self.maxFileByteCount {
+            throw FavoritesError.malformedImport(
+                "Favorites file exceeds \(Self.maxFileByteCount) bytes."
+            )
+        }
         let data = try Data(contentsOf: fileURL)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([FavoriteDevice].self, from: data)
+        let decoded = try decoder.decode([FavoriteDevice].self, from: data)
+        return try FavoriteDevice.validateAndDeduplicate(decoded)
     }
 
     public func save(_ favorites: [FavoriteDevice]) throws {
+        let cleaned = try FavoriteDevice.validateAndDeduplicate(favorites)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(favorites)
+        let data = try encoder.encode(cleaned)
         try data.write(to: fileURL, options: [.atomic])
     }
 }

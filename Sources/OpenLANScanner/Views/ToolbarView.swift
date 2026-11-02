@@ -14,10 +14,7 @@ struct ToolbarView: View {
             .frame(minWidth: 180, idealWidth: 220, maxWidth: 280)
             .accessibilityLabel("Network interface")
             .onChange(of: model.selectedInterfaceID) { _, _ in
-                // Keep current range unless empty.
-                if model.rangeText.isEmpty {
-                    model.applySelectedInterfaceSubnet()
-                }
+                model.suggestRangeForSelectedInterfaceIfAppropriate()
             }
 
             Button {
@@ -37,7 +34,13 @@ struct ToolbarView: View {
             .help("Snap to class C range")
             .accessibilityLabel("Snap to class C range")
 
-            TextField("IP, range, or CIDR", text: $model.rangeText)
+            TextField(
+                "IP, range, or CIDR",
+                text: Binding(
+                    get: { model.rangeText },
+                    set: { model.rangeText = $0; model.markRangeEdited() }
+                )
+            )
                 .textFieldStyle(.roundedBorder)
                 .frame(minWidth: 200)
                 .help("Examples: 192.168.1.0/24 or 192.168.1.1-254")

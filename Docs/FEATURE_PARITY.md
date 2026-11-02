@@ -6,23 +6,23 @@ Legend: **Done** · **Partial** · **Unsupported** · **N/A (macOS)**
 
 | Capability | Status | Notes |
 |---|---|---|
-| Enter IP range / scan / stop | Done | CIDR, single IP, `a-b` ranges |
-| Suggest current subnet | Done | From selected interface IPv4 + mask |
+| Enter IP range / scan / stop | Done | CIDR, single IP, `a-b` ranges; oversized ranges rejected before allocation |
+| Suggest current subnet | Done | From selected interface; does not overwrite a manually edited target |
 | Class-C helper | Done | `/24` snap from current start address |
-| Live results table | Done | AppKit `NSTableView` hosted in SwiftUI |
-| Columns: status, IP, hostname, MAC, vendor, latency, services | Done | Unavailable fields shown as em dash |
-| Numeric IP sort | Done | |
-| Progress / elapsed / cancel | Done | Generation-token prevents stale updates |
-| Favorites with custom names/notes | Done | Local JSON store |
+| Live results table | Done | AppKit `NSTableView`; multi-select; selection/scroll preserved |
+| Columns: status, IP, name, MAC, vendor, latency, services | Done | Custom name falls back to hostname; widths/order/sort persisted |
+| Numeric IP / latency sort | Done | Header ascending/descending |
+| Progress / elapsed / cancel | Done | Cancels in-flight transports; generation-token prevents stale updates |
+| Favorites with custom names/notes | Done | Local JSON; validated/deduplicated imports |
 | Text search filter | Done | |
-| Online-only / favorites filters | Done | |
-| Export CSV | Done | RFC-style escaping |
-| Export JSON | Done | |
-| Import/export favorites | Done | JSON |
-| MAC from local neighbors | Partial | ARP/neighbor table when present; not for routed/VPN-only hosts |
-| Vendor (OUI) | Partial | Bundled sample + optional full IEEE download |
-| Hostname (DNS) | Done | Reverse DNS |
-| Hostname (Bonjour/mDNS) | Partial | Browse common service types; best-effort |
+| Online-only / favorites filters | Done | Distinct empty states when filters match nothing |
+| Export CSV / JSON | Done | All, filtered, or selected rows |
+| Import/export favorites | Done | JSON with actionable errors |
+| MAC from local neighbors | Partial | Refreshed after probe; neighbor cache alone ≠ currently online |
+| Vendor (OUI) | Partial | Bundled sample + in-app IEEE/compact CSV import; longest-prefix; LAA noted |
+| Hostname (DNS) | Done | Async reverse DNS enrichment |
+| Hostname (Bonjour/mDNS) | Partial | Optional browse; best-effort; often hostname-only |
+| ICMP discovery | Partial | Best-effort unprivileged echo; failures ≠ offline |
 | Shared folders browse | Done | Opens `smb://` in Finder |
 | HTTP / HTTPS open | Done | Default browser |
 | FTP open | Done | `ftp://` via browser/handler |
@@ -31,15 +31,17 @@ Legend: **Done** · **Partial** · **Unsupported** · **N/A (macOS)**
 | Ping / traceroute tools | Done | Opens Terminal with `/sbin/ping` or `traceroute` |
 | VNC / Screen Sharing | Done | `vnc://` URL |
 | RDP | Partial | Launches Microsoft Remote Desktop / `rdp://` if installed; else instructions |
-| Wake-on-LAN | Done | Magic packet when MAC known |
+| Wake-on-LAN | Done | Magic packet when MAC known; success/failure feedback |
+| Scan history / compare | Done | Local snapshots; conservative matching; no cloud |
 | Remote shutdown / abort | Unsupported | Windows-oriented; see Architecture notes |
 | Radmin | Unsupported | Proprietary Windows remote control |
 | NetBIOS name | Unsupported | No fragile Windows name-service dependency in v1 |
 | Portable USB mode | N/A | macOS app bundle; ZIP distribution instead |
-| Multi-language UI | Partial | English first; String Catalog ready |
+| Multi-language UI | Partial | English UI strings; not fully localized |
 | High-accuracy multi-pass scan | Partial | Optional retry count in preferences |
-| Scan rate / concurrency prefs | Done | |
-| Resource/port selection | Done | Configurable service probe set |
+| Scan rate / concurrency prefs | Done | Discovery vs enrichment concurrency |
+| Resource/port selection | Done | Separate discovery-port and service-port toggles |
+| Accessible keyboard actions | Partial | Native table navigation + menu shortcuts; Copy respects text editing |
 
 ## Honest limitations (product copy)
 
