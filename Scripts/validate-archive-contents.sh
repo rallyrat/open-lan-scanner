@@ -25,21 +25,24 @@ for zip in "${zips[@]}"; do
   echo "    zip content OK"
 done
 
-for dmg in "${dmgs[@]}"; do
-  echo "==> Checking $(basename "$dmg")"
-  mnt="$(mktemp -d /tmp/ols-dmg-check-XXXX)"
-  cleanup() { hdiutil detach "$mnt" >/dev/null 2>&1 || true; rmdir "$mnt" 2>/dev/null || true; }
-  trap cleanup EXIT
-  hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mnt" >/dev/null
-  test -d "$mnt/OpenLANScanner.app" || fail "DMG missing OpenLANScanner.app"
-  test -x "$mnt/OpenLANScanner.app/Contents/MacOS/OpenLANScanner" || fail "DMG app not executable"
-  if find "$mnt/OpenLANScanner.app" \( -name '._*' -o -name '.DS_Store' \) | grep -q .; then
-    find "$mnt/OpenLANScanner.app" \( -name '._*' -o -name '.DS_Store' \) | head -40 >&2
-    fail "AppleDouble / .DS_Store found inside mounted DMG app"
-  fi
-  echo "    dmg content OK"
-  cleanup
-  trap - EXIT
-done
+# nullglob leaves dmgs empty when CREATE_DMG=0; skip rather than unbound-expand.
+if ((${#dmgs[@]} > 0)); then
+  for dmg in "${dmgs[@]}"; do
+    echo "==> Checking $(basename "$dmg")"
+    mnt="$(mktemp -d /tmp/ols-dmg-check-XXXX)"
+    cleanup() { hdiutil detach "$mnt" >/dev/null 2>&1 || true; rmdir "$mnt" 2>/dev/null || true; }
+    trap cleanup EXIT
+    hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mnt" >/dev/null
+    test -d "$mnt/OpenLANScanner.app" || fail "DMG missing OpenLANScanner.app"
+    test -x "$mnt/OpenLANScanner.app/Contents/MacOS/OpenLANScanner" || fail "DMG app not executable"
+    if find "$mnt/OpenLANScanner.app" \( -name '._*' -o -name '.DS_Store' \) | grep -q .; then
+      find "$mnt/OpenLANScanner.app" \( -name '._*' -o -name '.DS_Store' \) | head -40 >&2
+      fail "AppleDouble / .DS_Store found inside mounted DMG app"
+    fi
+    echo "    dmg content OK"
+    cleanup
+    trap - EXIT
+  done
+fi
 
 echo "==> Archive content validation passed"
